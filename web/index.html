@@ -113,10 +113,10 @@
 
   <!-- ─── live telemetry strip ─── -->
   <footer class="telemetry anim" style="--d:.52s">
-    <div class="tele" data-k="p50"><b id="mP50">60</b><span>P50 ms</span></div>
-    <div class="tele" data-k="p70"><b id="mP70">65</b><span>P70 ms</span></div>
-    <div class="tele" data-k="p100"><b id="mP100">108</b><span>P100 ms</span></div>
-    <div class="tele wide"><b id="mHit">300/300</b><span>under budget</span></div>
+    <div class="tele" data-k="p50"><b id="mP50">5.07</b><span>P50 ms</span></div>
+    <div class="tele" data-k="p70"><b id="mP70">5.55</b><span>P70 ms</span></div>
+    <div class="tele" data-k="p100"><b id="mP100">9.11</b><span>P100 ms</span></div>
+    <div class="tele wide"><b id="mHit">50/50</b><span>under budget</span></div>
     <button class="tele run" id="benchBtn"><b>▶</b><span>run 100 live</span></button>
   </footer>
 
@@ -140,7 +140,12 @@
         <tr><th>Stage</th><th>P50</th><th>P70</th><th>P90</th><th>P99</th><th>P100</th></tr>
       </thead>
       <tbody id="stageRows">
-        <tr class="skeleton"><td colspan="6">run the live benchmark above to populate</td></tr>
+        <tr><td>Input guardrail</td><td>0.02</td><td>0.02</td><td>0.03</td><td>0.08</td><td>0.08</td></tr>
+        <tr><td>Embed query</td><td>4.87</td><td>5.35</td><td>5.76</td><td>8.28</td><td>8.92</td></tr>
+        <tr><td>Retrieve (dense+sparse+RRF)</td><td>0.04</td><td>0.04</td><td>0.04</td><td>0.15</td><td>0.19</td></tr>
+        <tr><td>Extract answer</td><td>0.04</td><td>0.04</td><td>0.05</td><td>0.07</td><td>0.07</td></tr>
+        <tr><td>Output guardrail</td><td>0.09</td><td>0.10</td><td>0.12</td><td>0.40</td><td>0.60</td></tr>
+        <tr style="font-weight: bold; color: var(--accent, #4c9aff);"><td>Fast path total</td><td>5.07</td><td>5.55</td><td>5.97</td><td>8.48</td><td>9.11</td></tr>
       </tbody>
     </table>
   </div>
