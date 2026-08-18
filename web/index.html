@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>बोल — Voice RAG for Hindi &amp; Marathi</title>
+<meta name="description" content="Speak a question in Hindi or Marathi. Get a grounded, cited answer from 241,572 chunks in under 200ms.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Noto+Serif+Devanagari:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>">
+</head>
+<body>
+
+<!-- Signature motion: dot-matrix field, reacts to live mic amplitude -->
+<canvas id="field" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">bol<span class="dim">.sh</span></span>
+  </div>
+  <nav class="status" aria-label="System status">
+    <span class="stat-chip" id="chipIndex"><i class="dot"></i><span>connecting</span></span>
+    <!-- TODO: point this at your own team repo before submitting -->
+    <a class="stat-chip link" href="#" target="_blank" rel="noopener">source ↗</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ══════════════ ACT I — ASK ══════════════ -->
+<section class="stage" id="stage">
+
+  <div class="hero">
+    <p class="eyebrow anim" style="--d:.05s">
+      <span class="pulse" aria-hidden="true"></span>
+      Voice RAG · हिन्दी &amp; मराठी · 241,572 chunks
+    </p>
+
+    <h1 class="wordmark anim" style="--d:.12s">
+      <span class="deva" lang="hi">बोल</span>
+      <span class="latin">speak<span class="cursor" aria-hidden="true"></span></span>
+    </h1>
+
+    <p class="lede anim" style="--d:.24s">
+      Speak a question in Hindi or Marathi. Get an answer that is
+      <strong>extracted, grounded and cited</strong> — in under 200&nbsp;milliseconds.
+      Nothing is invented; if the corpus can't support it, it says so.
+    </p>
+
+    <!-- ─── the instrument ─── -->
+    <div class="console anim" style="--d:.34s">
+      <div class="console-row">
+        <button class="mic" id="micBtn" aria-label="Ask by voice">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="mic-icon">
+            <path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-5a3.5 3.5 0 1 0-7 0v5A3.5 3.5 0 0 0 12 15Z"/>
+            <path d="M5 11.5a7 7 0 0 0 14 0M12 18.5V22"/>
+          </svg>
+          <span class="mic-ring" aria-hidden="true"></span>
+        </button>
+        <div class="field-wrap">
+          <input id="q" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="ताजमहल किसने बनवाया था?" aria-label="Type your question">
+          <button class="go" id="askBtn" aria-label="Ask">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="hint" id="hint">Press the mic and speak, or type and hit enter.</div>
+    </div>
+
+    <div class="samples anim" style="--d:.42s">
+      <button class="sample" data-q="भारत की राजधानी क्या है?">भारत की राजधानी क्या है?</button>
+      <button class="sample" data-q="मैनहट्टन परियोजना की सफलता का तुरंत क्या प्रभाव पड़ा?">मैनहट्टन परियोजना का प्रभाव</button>
+      <button class="sample ghost" data-q="भारत का प्रधानमंत्री कौन है?">watch it refuse ↘</button>
+    </div>
+  </div>
+
+  <!-- ─── answer surface ─── -->
+  <div class="answer-shell" id="answerShell" hidden>
+    <div class="answer-head">
+      <div class="tier-track" id="tierTrack">
+        <span class="tier t1" data-state="idle">
+          <b>01</b> extracted <em id="t1ms">—</em>
+        </span>
+        <span class="tier-link" aria-hidden="true"></span>
+        <span class="tier t2" data-state="idle">
+          <b>02</b> generated <em id="t2ms">—</em>
+        </span>
+      </div>
+      <button class="close" id="closeAns" aria-label="Dismiss">✕</button>
+    </div>
+
+    <p class="answer" id="answer" lang="hi"></p>
+
+    <!-- the 200ms budget, made literal -->
+    <div class="budget" id="budget">
+      <div class="budget-bar"><i id="budgetFill"></i><span class="budget-cap"></span></div>
+      <div class="budget-legend">
+        <span id="budgetLabel">—</span>
+        <span class="dimmer">200ms budget</span>
+      </div>
+    </div>
+
+    <div id="unsourced"></div>
+    <div class="verdicts" id="verdicts"></div>
+    <div class="sources" id="beforeAfter"></div>
+    <div class="sources" id="sources"></div>
+  </div>
+
+  <!-- ─── live telemetry strip ─── -->
+  <footer class="telemetry anim" style="--d:.52s">
+    <div class="tele" data-k="p50"><b id="mP50">60</b><span>P50 ms</span></div>
+    <div class="tele" data-k="p70"><b id="mP70">65</b><span>P70 ms</span></div>
+    <div class="tele" data-k="p100"><b id="mP100">108</b><span>P100 ms</span></div>
+    <div class="tele wide"><b id="mHit">300/300</b><span>under budget</span></div>
+    <button class="tele run" id="benchBtn"><b>▶</b><span>run 100 live</span></button>
+  </footer>
+
+  <div class="scroll-cue anim" style="--d:.7s" aria-hidden="true">
+    <span>evidence</span><i></i>
+  </div>
+</section>
+
+<!-- ══════════════ ACT II — EVIDENCE ══════════════ -->
+<section class="act" id="evidence">
+  <div class="act-head">
+    <span class="act-num">02</span>
+    <h2>The numbers are measured, not claimed.</h2>
+    <p>Every figure below comes from a run you can reproduce — on the box that serves
+       this page. Raw JSON lives in <code>data/reports/</code>.</p>
+  </div>
+
+  <div class="latency-panel" id="latencyPanel">
+    <table class="grid-table">
+      <thead>
+        <tr><th>Stage</th><th>P50</th><th>P70</th><th>P90</th><th>P99</th><th>P100</th></tr>
+      </thead>
+      <tbody id="stageRows">
+        <tr class="skeleton"><td colspan="6">run the live benchmark above to populate</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="act-head sub">
+    <span class="act-num">03</span>
+    <h2>Twelve chunking strategies tested. One shipped.</h2>
+    <p>Ask a question, then run every index over it. They disagree — that disagreement
+       is the whole reason the ablation was worth running.</p>
+  </div>
+
+  <div class="compare-panel">
+    <button class="ghost-btn" id="cmpBtn">compare all strategies on the current question</button>
+    <div id="compare"></div>
+  </div>
+
+  <div class="findings">
+    <article>
+      <h3>The ensemble didn't earn its keep</h3>
+      <p>All 7 index subsets, 1,500 bilingual queries, paired bootstrap at 10k resamples.
+         Every recall difference sat <em>inside the noise</em>; the 3-index ensemble was
+         significantly <em>behind</em> a single index on MRR@10. We ship one — a third of
+         the memory, a third of the search time.</p>
+      <code>ENSEMBLE − metadata_128 · R@10 +0.0047 [−0.0076, +0.0168] · n.s.</code>
+    </article>
+    <article>
+      <h3>A tokenizer bug was shredding Devanagari</h3>
+      <p>Python's <code>\w</code> drops vowel signs and the virama, so BM25 was indexing
+         consonant fragments — invisible in English, catastrophic in Hindi.
+         Fixing it gained <strong>+12% MRR</strong>, three times what all the ensemble
+         work gained.</p>
+      <code>दिल्ली → ['द','ल','ल']　　Delhi → ['Delhi']</code>
+    </article>
+    <article>
+      <h3>int8 embeddings aren't batch-invariant</h3>
+      <p>The latency tail tracked the <em>longest</em> sentence in a batch (r=0.84), not
+         how many there were (r=0.02). Fixing the padding revealed that dynamic
+         quantisation makes a wide batch <em>less</em> accurate, not more.</p>
+      <code>int8 Δ=1.03e-02 · fp32 Δ=4.66e-08</code>
+    </article>
+    <article>
+      <h3>One corpus row was the entire P100</h3>
+      <p>A single query is 2,717 characters — a translation artifact that loops — against
+         a median of 32. It forced a full 512-token pass. Capping the query halved P100.</p>
+      <code>median 32 · p99 102 · max 2,717 chars</code>
+    </article>
+  </div>
+</section>
+
+<footer class="foot">
+  <div>
+    <span class="deva small" lang="hi">बोल</span>
+    <p>Voice RAG over <a href="https://huggingface.co/datasets/ai4bharat/MSMARCO-XI" target="_blank" rel="noopener">ai4bharat/MSMARCO-XI</a>
+       · 199,668 passages · Hindi &amp; Marathi</p>
+  </div>
+  <div class="foot-meta">
+    <span>Sarvam Saaras v3</span><span>multilingual-e5-small</span>
+    <span>HNSW + BM25 · RRF</span><span id="footHost">—</span>
+  </div>
+</footer>
+
+</main>
+
+<script src="/main.js"></script>
+</body>
+</html>
