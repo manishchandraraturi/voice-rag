@@ -4,7 +4,7 @@
   "routes": [
     {
       "src": "/(ask|voice|compare|benchmark|health)",
-      "dest": "https://YOUR-RENDER-APP-NAME.onrender.com/$1"
+      "dest": "http://65.1.248.78:8000/$1"
     },
     {
       "src": "/(.*)",
