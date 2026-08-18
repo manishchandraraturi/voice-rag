@@ -585,14 +585,16 @@ class LLMChain:
 
         # Model Racing: Speculative parallel execution
         if self.racing and len(eligible) > 1:
+            call_kw = dict(kw)
+            call_kw.setdefault("retries", 0)
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(eligible)) as executor:
                 future_to_client = {
                     executor.submit(
                         c.generate,
                         question,
                         contexts,
-                        retries=0,
-                        **(kw if "system" in kw else {}),
+                        **call_kw,
                     ): (i, c)
                     for i, c in eligible
                 }
@@ -621,7 +623,10 @@ class LLMChain:
         for i, c in eligible:
             key = f"{c.provider}:{c.model}"
             solo = len(self.clients) == 1
-            r = c.generate(question, contexts, **(kw if (solo and i == 0) else ({"retries": 0} | kw)))
+            call_kw = dict(kw)
+            if not (solo and i == 0):
+                call_kw.setdefault("retries", 0)
+            r = c.generate(question, contexts, **call_kw)
             if r.ok:
                 self._served[key] = self._served.get(key, 0) + 1
                 self._cooldown_until.pop(i, None)

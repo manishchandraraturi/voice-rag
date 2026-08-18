@@ -129,30 +129,25 @@ ABSTAIN_TEXT = (
 )
 
 GREETING_TEXT = (
-    "नमस्ते! मुझसे दस्तावेज़ों के बारे में कोई प्रश्न पूछिए। "
-    "Hello! Ask me a question about the indexed documents — try “भारत की राजधानी क्या है?”"
+    "नमस्ते भाई! मैं आपका Voice RAG AI सहायक हूँ और एकदम बढ़िया हूँ। "
+    "आप मुझसे भारत, इतिहास, विज्ञान, तकनीक, भूगोल या किसी भी सामान्य ज्ञान के विषय पर प्रश्न पूछ सकते हैं!"
 )
 
-# Greetings and other conversational openers are not questions, and retrieval
-# treats them terribly. Measured: "Hello" scored **0.602 support** against a
-# passage reading "CIL is more complex than C# ... System.Console.WriteLine(Hello,
-# World!)" -- a lexical collision on the literal string "Hello". That cleared the
-# 0.45 grounding gate and was served as an answer.
-#
-# The grounding gate cannot catch this, because the passage genuinely *is* in the
-# corpus and genuinely *does* contain the token. The defect is upstream: a
-# greeting has no informational intent to satisfy, so the right move is to answer
-# conversationally and never spend retrieval at all. Requirement 6 calls this
-# "off-topic queries".
-#
-# Deliberately narrow -- it matches only when the *entire* input is a greeting, so
-# "hello, who built the Taj Mahal?" still retrieves normally.
+# Greetings, casual openers, and conversational questions
+_GREETING_WORDS = (
+    r"(?:hi+|hey+|hello+|yo|hola|namaste|namaskar|नमस्ते|नमस्कार|हॅलो|हैलो|हेलो|"
+    r"good\s+(?:morning|afternoon|evening)|pranam|प्रणाम|ram\s+ram|राम\s+राम|jai\s+shree\s+ram|जय\s+श्री\s+राम)"
+)
+_CONV_PHRASES = (
+    r"(?:how\s+are\s+you|what'?s\s+up|kaise?\s+(?:ho|hai|hain)|कैसे\s+(?:हो|है|हैं)|कैसा\s+है|"
+    r"(?:bhai|bro|yaar|dost|भाई|दोस्त|यार)(?:\s+kaise?\s+(?:ho|hai|hain)|\s+कैसे\s+(?:हो|है|हैं)|\s+कैसा\s+है)?|"
+    r"tum\s+kaun\s+ho|aap\s+kaun\s+hai|तुम\s+कौन\s+हो|आप\s+कौन\s+हैं|तू\s+कौन\s+है|"
+    r"who\s+are\s+you|what\s+is\s+your\s+name|what\s+can\s+you\s+do|"
+    r"kya\s+haal\s+hai|क्या\s+हाल\s+है|kya\s+chal\s+raha\s+hai|क्या\s+चल\s+रहा\s+है|"
+    r"test|testing|thanks?|thank\s+you|dhanyavaad|धन्यवाद|ok|okay|bye)"
+)
 _GREETING = re.compile(
-    r"^\W*(hi|hey+|hello+|yo|hola|namaste|namaskar|नमस्ते|नमस्कार|हॅलो|हैलो|"
-    r"good\s+(morning|afternoon|evening)|"
-    r"how\s+are\s+you|what'?s\s+up|kaise?\s+ho|कैसे\s+हो|test|testing|"
-    r"thanks?|thank\s+you|dhanyavaad|धन्यवाद|ok|okay|bye)"
-    r"[\s!.?,]*$",
+    rf"^\W*(?:{_GREETING_WORDS}\s*)?(?:{_CONV_PHRASES}|\b{_GREETING_WORDS}\b)[\s!.?,]*$",
     re.I,
 )
 

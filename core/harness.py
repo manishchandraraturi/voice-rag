@@ -203,6 +203,7 @@ class RAGHarness:
             return
         if g.ok and g.sufficient and g.answer:
             r.unsourced_answer = g.answer
+            r.generated_answer = g.answer
 
     def answer(self, question: str, *, generate: bool = True) -> AnswerResult:
         t_start = time.perf_counter()
