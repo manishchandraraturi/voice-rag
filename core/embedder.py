@@ -68,7 +68,8 @@ def default_variant() -> str:
         return v
     if "CUDAExecutionProvider" in available_providers():
         return "fp32"
-    return "int8_arm" if os.uname().machine in ("arm64", "aarch64") else "int8_x86"
+    # Generic int8 model (int8_arm) runs safely on all x86 and ARM CPUs
+    return "int8_arm"
 
 
 @dataclass(slots=True)

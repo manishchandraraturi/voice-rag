@@ -37,7 +37,7 @@ curl -s "https://bol.sh/benchmark?n=100"
 
 ```mermaid
 flowchart TD
-    A["🎤 Voice input"] --> B["Sarvam Saaras v3<br/>STT · 500-1300ms"]
+    A["🎤 Voice input"] --> B["Groq Whisper / Sarvam Saaras v3<br/>STT · 200-500ms"]
     A2["⌨️ Typed question"] --> G1
     B -->|transcript| G1
 
@@ -56,31 +56,31 @@ flowchart TD
         G2 -->|grounded| FAST["✅ FAST ANSWER<br/>grounded + cited"]
     end
 
-    FAST --> LLM["🤖 LLM polish<br/>Gemini · 1.3s · outside budget"]
+    FAST --> RACE["🏁 Model Racing<br/>Groq LPUs · 4 models in parallel"]
+    RACE --> LLM["🤖 Parallel Groq LPU Call<br/>gpt-oss-120b · gpt-oss-20b · qwen3.6 · compound-mini"]
     LLM --> VER["🛡️ Verify generated text<br/>novel-fact check"]
     VER -->|passes| FINAL["✨ Polished answer"]
     VER -->|"rejected, timeout or error"| KEEP["↩️ Keep the fast answer"]
 
     style BUDGET fill:#0d2818,stroke:#3fb950,stroke-width:3px,color:#e6edf3
     style FAST fill:#1a4d2e,stroke:#3fb950,stroke-width:2px,color:#ffffff
+    style RACE fill:#2b1a4d,stroke:#9d4edd,stroke-width:2px,color:#ffffff
     style FINAL fill:#1d3f6b,stroke:#4c9aff,color:#ffffff
     style KEEP fill:#1a4d2e,stroke:#3fb950,color:#ffffff
     style REFUSE fill:#4d1f1c,stroke:#f85149,color:#ffffff
     style ABS fill:#4d3c15,stroke:#d29922,color:#ffffff
 ```
 
-### The one design decision that matters
+### The design decisions that matter
 
-**The extractive answer is computed before generation and never depends on it.**
+1. **The extractive answer is computed before generation and never depends on it.**
+   - Makes the sub-200ms claim *measurable* — the fast answer is real, grounded, and citable on its own.
+   - Error-recovery path: LLM timeout or 429 leaves a real answer standing.
+   - Instant response feel without spinners.
 
-That single choice does three jobs at once:
-
-1. It makes the sub-200ms claim *measurable* — the fast answer is real, grounded, and
-   citable on its own, not a placeholder.
-2. It is the error-recovery path. An LLM timeout, a 429, malformed JSON, or a failed
-   grounding check leaves a real answer standing. Recovery here is a **second answer
-   already computed**, not a `try/except`.
-3. It makes the demo feel instant instead of showing a spinner.
+2. **Model Racing on Groq LPUs for sub-second generation.**
+   - Dispatches query-rewriting and polishing to multiple Groq-hosted models in parallel (`openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.6-27b`, `groq/compound-mini`).
+   - Accepts whichever finishes validly first, smoothing out single-model latency spikes and cloud jitter.
 
 ---
 
@@ -88,11 +88,11 @@ That single choice does three jobs at once:
 
 | # | Requirement | Implementation | Evidence |
 |---|---|---|---|
-| 1 | Speech-to-text (Sarvam / ElevenLabs) | `core/stt.py` — Sarvam **Saaras v3** | 499–1316ms measured, code-mix tolerant |
+| 1 | Speech-to-text (Groq / Sarvam) | `core/stt.py` — Groq Whisper & Sarvam **Saaras v3** | 200–500ms Groq Whisper, code-mix tolerant |
 | 2 | Chunking must be **vast** | `ingest/chunkers.py` — 4 strategies × sizes × granularities | [ablation below](#2-chunking--12-variants-tested-1-shipped) |
 | 3 | Under 200ms | Two-tier answering, `core/harness.py` | **P50 64ms, 300/300 inside budget** |
 | 4 | P50 / P70 / P100 analytics | `bench/fastpath.py`, live `/benchmark` | [numbers below](#4-latency-analytics) |
-| 5 | Harness | `core/harness.py` — typed I/O, retries, timeouts, fallback | 4 LLM backends behind one interface |
+| 5 | Harness & Model Racing | `core/harness.py`, `core/llm.py` — Groq LPU racing pool | 4 parallel Groq models + multi-provider fallback |
 | 6 | Guardrails | `core/guardrails.py` — both sides of generation | [below](#6-guardrails--knowing-when-not-to-answer) |
 
 ---
@@ -302,12 +302,12 @@ Raw outputs for every table above live in [`data/reports/`](data/reports/).
 
 | Layer | Choice | Why |
 |---|---|---|
-| STT | Sarvam Saaras v3 | Indic + code-mixed speech |
+| STT | Groq Whisper / Sarvam Saaras v3 | Ultra-fast Groq Whisper (200-400ms) + Sarvam for Indic code-mixing |
 | Embeddings | `multilingual-e5-small` (384-dim, ONNX int8) | Multilingual — English-only models fail on Devanagari |
 | Dense index | `hnswlib` | Builds cleanly on ARM; faiss aarch64 wheels are unreliable |
 | Sparse index | `bm25s` | Pure numpy, ARM-safe |
 | Fusion | Reciprocal Rank Fusion | Fuses by rank, so BM25 scores never need calibrating against cosine |
-| Generation | Gemini (+ Bedrock / Anthropic / OpenRouter behind one interface) | Generation is the only stage that leaves the machine, so it's the only one that fails for reasons we don't control |
+| Generation | **Groq LPU (Model Racing)** | Parallel dispatch across 4 Groq models (`gpt-oss-120b`, `gpt-oss-20b`, `qwen3.6-27b`, `compound-mini`); fastest valid completion wins |
 | Serving | AWS `m7i-flex.large`, Docker, Caddy TLS | x86 AVX-512 VNNI int8 path; dedicated cores keep the tail predictable |
 
 The full engineering record — including the measurements that changed our minds — is in

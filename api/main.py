@@ -47,7 +47,7 @@ from core.retriever import (
     FULL_ENSEMBLE,
     AdaptiveRetriever,
 )
-from core.stt import SarvamSTT
+from core.stt import GroqSTT, SarvamSTT
 
 DATA_ROOT = Path(os.getenv("DATA_ROOT", "/data" if Path("/data").is_dir() else "./data"))
 INDEX_TAG = os.getenv("INDEX_TAG", "full")
@@ -58,6 +58,17 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 # core.retriever so the API cannot drift from what the ablation concluded.
 SERVE = os.getenv("SERVE_ENSEMBLE", ",".join(DEFAULT_ENSEMBLE)).split(",")
 COMPARE = FULL_ENSEMBLE
+
+
+def _create_stt():
+    """Select STT provider: Groq Whisper when configured, else Sarvam."""
+    provider = os.getenv("STT_PROVIDER", "").lower()
+    if provider == "groq":
+        stt = GroqSTT()
+        if stt.configured:
+            return stt
+    return SarvamSTT()
+
 
 STATE: dict = {}
 
@@ -86,7 +97,9 @@ async def lifespan(app: FastAPI):
         if (INDEX_ROOT / name / "hnsw.bin").exists():
             indexes[name] = ChunkIndex.load(INDEX_ROOT, name)
     if not indexes:
-        raise RuntimeError(f"no indexes found under {INDEX_ROOT}")
+        print(f"No indexes found under {INDEX_ROOT} -- building default metadata_128 index...")
+        default_ix = _build_default_index(INDEX_ROOT, embedder)
+        indexes["metadata_128"] = default_ix
 
     serve_names = [n for n in SERVE if n in indexes] or list(indexes)[:1]
     english = (
@@ -109,7 +122,7 @@ async def lifespan(app: FastAPI):
         indexes=indexes,
         harness=harness,
         serve_names=serve_names,
-        stt=SarvamSTT(),
+        stt=_create_stt(),
         # Held for /benchmark so it measures the pipeline, not disk reads.
         sample_queries=_load_sample_queries(),
         started_ms=round((time.perf_counter() - t0) * 1000, 1),

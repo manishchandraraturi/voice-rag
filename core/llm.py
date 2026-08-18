@@ -182,7 +182,7 @@ class LLMClient:
             self.base_url = "https://integrate.api.nvidia.com/v1"
         elif self.provider == "groq":
             # Groq runs on LPUs and returns in a few hundred ms.
-            # Default is openai/gpt-oss-120b with openai/gpt-oss-20b as race/fallback.
+            # Default is openai/gpt-oss-120b — available on this Groq account, LPU-accelerated.
             self.model = model or os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
             self.api_key = os.getenv("GROQ_API_KEY", "")
             self.base_url = "https://api.groq.com/openai/v1"
@@ -320,7 +320,7 @@ class LLMClient:
                 response_format={"type": "json_object"},
             )
             return resp.choices[0].message.content or ""
-        except (ImportError, Exception):
+        except ImportError:
             return self._openai_compatible(prompt, max_tokens)
 
     def _anthropic(self, prompt: str, max_tokens: int) -> str:
@@ -490,7 +490,7 @@ class LLMChain:
 
         spec = os.getenv(
             "LLM_FALLBACK_CHAIN",
-            "groq:openai/gpt-oss-20b,gemini:gemini-flash-lite-latest,groq:groq/compound-mini",
+            "groq:openai/gpt-oss-20b,groq:qwen/qwen3.6-27b,groq:groq/compound-mini",
         )
         for entry in (e.strip() for e in spec.split(",") if e.strip()):
             provider, _, model = entry.partition(":")

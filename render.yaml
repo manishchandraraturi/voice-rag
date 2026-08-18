@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: voice-rag-backend
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: starter
+    region: singapore
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: LLM_FALLBACK_CHAIN
+        value: groq:openai/gpt-oss-20b,groq:qwen/qwen3.6-27b,groq:groq/compound-mini
+      - key: LLM_RACING
+        value: "true"
+      - key: STT_PROVIDER
+        value: groq
+      - key: E5_VARIANT
+        value: int8_arm
+      - key: PORT
+        value: "8000"

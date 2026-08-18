@@ -9,6 +9,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
+    E5_VARIANT=int8_arm \
     HF_HOME=/data/hf_cache
 
 # build-essential only needed if a wheel is missing for the target arch.

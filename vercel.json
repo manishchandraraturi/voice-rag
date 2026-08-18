@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "routes": [
+    {
+      "src": "/(ask|voice|compare|benchmark|health)",
+      "dest": "https://YOUR-RENDER-APP-NAME.onrender.com/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/web/$1"
+    }
+  ]
+}

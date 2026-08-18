@@ -146,3 +146,117 @@ class SarvamSTT:
         if self._client is not None:
             self._client.close()
             self._client = None
+
+
+class GroqSTT:
+    """Speech-to-text via Groq Whisper — ultra-fast transcription on LPU hardware.
+
+    Groq's Whisper API returns in ~200–400ms for typical voice queries.
+    Uses whisper-large-v3-turbo by default, which handles Hindi and Marathi
+    well enough for grounded retrieval (the embedding handles cross-lingual
+    matching, so minor transcription artefacts don't matter).
+
+    Same Transcript dataclass contract as SarvamSTT, so the rest of the
+    pipeline is unaware of which provider is active.
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str = "whisper-large-v3-turbo",
+        timeout_s: float = 15.0,
+    ):
+        self.api_key = api_key or os.getenv("GROQ_API_KEY", "")
+        self.model = model
+        self.timeout_s = timeout_s
+        self._client = None  # lazily initialised
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_key)
+
+    def transcribe(
+        self,
+        audio: bytes,
+        filename: str = "audio.wav",
+        content_type: str = "audio/wav",
+        *,
+        retries: int = 2,
+        backoff_s: float = 0.5,
+    ) -> Transcript:
+        """Transcribe an audio blob via Groq Whisper. Never raises -- check `.ok`."""
+        t0 = time.perf_counter()
+        out = Transcript()
+
+        if not self.configured:
+            out.error = "GROQ_API_KEY not set"
+            out.took_ms = round((time.perf_counter() - t0) * 1000, 2)
+            return out
+        if not audio:
+            out.error = "empty audio"
+            out.took_ms = round((time.perf_counter() - t0) * 1000, 2)
+            return out
+
+        last = ""
+        for attempt in range(1, retries + 2):
+            out.attempts = attempt
+            try:
+                text = self._call_groq(audio, filename)
+                out.text = text.strip()
+                out.language_code = ""  # Groq Whisper doesn't return lang code
+                out.ok = True
+                out.took_ms = round((time.perf_counter() - t0) * 1000, 2)
+                return out
+            except Exception as e:  # noqa: BLE001 -- network faults are expected
+                last = f"{type(e).__name__}: {e}"
+
+            if attempt > retries:
+                break
+            time.sleep(backoff_s * attempt)
+
+        out.error = last
+        out.took_ms = round((time.perf_counter() - t0) * 1000, 2)
+        return out
+
+    def _call_groq(self, audio: bytes, filename: str) -> str:
+        """Try the Groq SDK first; fall back to httpx if not installed."""
+        try:
+            from groq import Groq
+
+            if self._client is None:
+                self._client = Groq(api_key=self.api_key, timeout=self.timeout_s)
+
+            import io
+
+            audio_file = io.BytesIO(audio)
+            audio_file.name = filename
+
+            resp = self._client.audio.transcriptions.create(
+                model=self.model,
+                file=audio_file,
+                response_format="text",
+            )
+            return str(resp)
+        except ImportError:
+            return self._call_groq_httpx(audio, filename)
+
+    def _call_groq_httpx(self, audio: bytes, filename: str) -> str:
+        """Fallback: direct HTTP call to Groq's OpenAI-compatible whisper endpoint."""
+        if self._client is None:
+            self._client = httpx.Client(timeout=self.timeout_s)
+
+        resp = self._client.post(
+            "https://api.groq.com/openai/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            files={"file": (filename, audio, "audio/wav")},
+            data={"model": self.model, "response_format": "text"},
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"Groq Whisper HTTP {resp.status_code}: {resp.text[:200]}")
+        return resp.text
+
+    def close(self) -> None:
+        if self._client is not None and isinstance(self._client, httpx.Client):
+            self._client.close()
+        self._client = None
+

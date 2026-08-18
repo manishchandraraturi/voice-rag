@@ -42,6 +42,8 @@ PROBES = [
 CANDIDATES: list[tuple[str, str]] = [
     ("groq", "openai/gpt-oss-120b"),
     ("groq", "openai/gpt-oss-20b"),
+    ("groq", "qwen/qwen3.6-27b"),
+    ("groq", "groq/compound-mini"),
     ("gemini", os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")),
 ]
 
