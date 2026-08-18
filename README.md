@@ -5,7 +5,7 @@ from a 241,572-chunk index in under 200ms.
 
 Built for **HH Goa 2026 Shortlisting Task 2**.
 
-🔗 **Live Deployment:** [http://65.1.248.78:8000](http://65.1.248.78:8000) (AWS Mumbai · `ap-south-1`) · 💻 **Repo:** [manishchandraraturi/voice-rag](https://github.com/manishchandraraturi/voice-rag)
+🔗 **Live Deployment (HTTPS):** [https://65.1.248.78.sslip.io](https://65.1.248.78.sslip.io) (AWS Mumbai · `ap-south-1`) · 💻 **Repo:** [manishchandraraturi/voice-rag](https://github.com/manishchandraraturi/voice-rag)
 
 ---
 
