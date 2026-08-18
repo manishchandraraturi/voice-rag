@@ -359,6 +359,12 @@ $('#micBtn').onclick = async () => {
   const btn = $('#micBtn');
   if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
 
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    $('#hint').classList.add('err');
+    $('#hint').textContent = 'Microphone requires HTTPS or localhost. Test via HTTPS or http://localhost:8000';
+    return;
+  }
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     chunks = [];
