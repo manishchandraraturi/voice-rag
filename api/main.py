@@ -85,6 +85,28 @@ def _percentiles(values: list[float]) -> dict[str, float]:
     }
 
 
+def _build_default_index(index_root: Path, embedder: Embedder) -> ChunkIndex:
+    """Build a default metadata_128 index on startup if no pre-built index exists on disk."""
+    corpus = [
+        {"chunk_id": "hin:1#md0", "passage_id": "hin:1", "text": "भारत की राजधानी नई दिल्ली है। नई दिल्ली भारत सरकार की तीनों शाखाओं का केंद्र है।", "query_type": "LOCATION", "lang": "hin"},
+        {"chunk_id": "hin:2#md0", "passage_id": "hin:2", "text": "ताजमहल आगरा में स्थित एक विश्व प्रसिद्ध मकबरा है जिसे मुगल सम्राट शाहजहां ने अपनी पत्नी मुमताज महल की याद में बनवाया था।", "query_type": "LOCATION", "lang": "hin"},
+        {"chunk_id": "hin:3#md0", "passage_id": "hin:3", "text": "मैनहट्टन परियोजना द्वितीय विश्व युद्ध के दौरान पहला परमाणु बम विकसित करने की एक गुप्त अमेरिकी अनुसंधान परियोजना थी।", "query_type": "DESCRIPTION", "lang": "hin"},
+        {"chunk_id": "hin:4#md0", "passage_id": "hin:4", "text": "सामाजिक सुरक्षा विकलांगता लाभ उन व्यक्तियों को दिए जाते हैं जो अपनी शारीरिक या मानसिक स्थिति के कारण काम करने में असमर्थ हैं।", "query_type": "DESCRIPTION", "lang": "hin"},
+        {"chunk_id": "mar:1#md0", "passage_id": "mar:1", "text": "भारताची राजधानी नवी दिल्ली आहे. हे शहर भारताचे राजकीय आणि प्रशासकीय केंद्र आहे.", "query_type": "LOCATION", "lang": "mar"},
+        {"chunk_id": "mar:2#md0", "passage_id": "mar:2", "text": "भारतातील सर्वात मोठे शहर मुंबई आहे. १९९१ च्या जनगणनेनुसार ग्रेटर मुंबई हे लोकसंख्येच्या दृष्टीने प्रथम क्रमांकावर होते.", "query_type": "LOCATION", "lang": "mar"},
+        {"chunk_id": "eng:1#md0", "passage_id": "eng:1", "text": "The capital of India is New Delhi. New Delhi serves as the seat of all three branches of the Government of India.", "query_type": "LOCATION", "lang": "eng"},
+        {"chunk_id": "eng:2#md0", "passage_id": "eng:2", "text": "The Taj Mahal is an ivory-white marble mausoleum on the right bank of the river Yamuna in Agra, built by Shah Jahan.", "query_type": "LOCATION", "lang": "eng"},
+        {"chunk_id": "eng:3#md0", "passage_id": "eng:3", "text": "The Manhattan Project was a research and development undertaking during World War II that produced the first nuclear weapons.", "query_type": "DESCRIPTION", "lang": "eng"},
+    ]
+    texts = [c["text"] for c in corpus]
+    vecs = embedder.encode_passages(texts)
+    ix = ChunkIndex("metadata_128")
+    ix.build(vecs, corpus)
+    index_root.mkdir(parents=True, exist_ok=True)
+    ix.save(index_root)
+    return ix
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     t0 = time.perf_counter()
