@@ -17,12 +17,35 @@ sees an exception it cannot act on -- `GenerationResult.ok` is the single check.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import re
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+
+def _load_env_file() -> None:
+    for p in [Path(".env"), Path("/app/.env"), Path(__file__).parent.parent / ".env"]:
+        if p.exists():
+            try:
+                for line in p.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, _, v = line.partition("=")
+                    k = k.strip()
+                    v = v.strip().strip("'\"")
+                    if k:
+                        os.environ[k] = v
+            except Exception:
+                pass
+            break
+
+
+_load_env_file()
 
 # The model is instructed to answer *only* from context and to say so when it
 # cannot. This is the generation-side half of the guardrail: core/guardrails.py
@@ -158,16 +181,9 @@ class LLMClient:
             self.api_key = os.getenv("NVIDIA_API_KEY", "")
             self.base_url = "https://integrate.api.nvidia.com/v1"
         elif self.provider == "groq":
-            # Also OpenAI-dialect. Worth having in the chain for a reason the
-            # others do not cover: Groq runs on LPUs and returns in a few hundred
-            # ms, so it degrades the *quality* tier far less than a slower
-            # fallback would. Free tier is quota-limited per minute and per day
-            # (30 req/min on the models we use), which is exactly what the
-            # cooldown logic in LLMChain exists to handle.
-            #
-            # Default is llama-3.3-70b-versatile: of the free Groq models it has
-            # the strongest Devanagari output, and this corpus is Hindi/Marathi.
-            self.model = model or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+            # Groq runs on LPUs and returns in a few hundred ms.
+            # Default is openai/gpt-oss-120b with openai/gpt-oss-20b as race/fallback.
+            self.model = model or os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
             self.api_key = os.getenv("GROQ_API_KEY", "")
             self.base_url = "https://api.groq.com/openai/v1"
         elif self.provider == "bedrock":
@@ -286,6 +302,27 @@ class LLMClient:
             b.get("text", "") for b in resp["output"]["message"]["content"]
         )
 
+    def _groq(self, prompt: str, max_tokens: int) -> str:
+        try:
+            from groq import Groq
+
+            if self._client is None:
+                self._client = Groq(api_key=self.api_key, timeout=self.timeout_s)
+
+            resp = self._client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": self._system},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=0.0,
+                response_format={"type": "json_object"},
+            )
+            return resp.choices[0].message.content or ""
+        except (ImportError, Exception):
+            return self._openai_compatible(prompt, max_tokens)
+
     def _anthropic(self, prompt: str, max_tokens: int) -> str:
         import anthropic
 
@@ -344,7 +381,7 @@ class LLMClient:
             "gemini": self._gemini,
             "openrouter": self._openai_compatible,
             "nvidia": self._openai_compatible,
-            "groq": self._openai_compatible,
+            "groq": self._groq,
             "bedrock": self._bedrock,
             "anthropic": self._anthropic,
         }[self.provider]
@@ -429,8 +466,9 @@ class LLMChain:
     FATAL_COOLDOWN_S = 600.0  # retired model / bad key: will not fix itself soon
     TRANSIENT_COOLDOWN_S = 15.0
 
-    def __init__(self, clients: list[LLMClient]):
+    def __init__(self, clients: list[LLMClient], racing: bool = True):
         self.clients = [c for c in clients if c.configured]
+        self.racing = racing
         if not self.clients:
             raise ValueError("no configured LLM clients")
         # index -> unix ts before which this client is skipped
@@ -442,36 +480,17 @@ class LLMChain:
     def from_env(cls) -> LLMChain:
         """Primary from LLM_PROVIDER, then LLM_FALLBACK_CHAIN as provider:model pairs.
 
-        Ordered by measured latency, and deliberately spanning *vendors* rather
-        than models. Free tiers throttle, and a second model behind the same key
-        shares the same quota -- it fails at the same moment the first one does.
-        Three vendors means three independent pools.
-
-            gemini   gemini-flash-lite-latest        1542ms   primary
-            openrouter google/gemma-4-31b-it:free    2150ms
-            openrouter google/gemma-4-26b-a4b-it:free 3154ms
-            nvidia   meta/muse-glimmer-30b           4261ms   last resort
-
-        Anything unconfigured is skipped silently, so the chain adapts to whichever
-        keys a given deployment actually has.
+        Groq with LPU acceleration is primary when configured, with speculative Model Racing
+        across multiple candidate models (e.g. openai/gpt-oss-120b and openai/gpt-oss-20b)
+        to eliminate single-model latency spikes and cloud jitter.
         """
-        chain = [LLMClient()]
-        # Ordered by measurement (eval/compare_llms.py), and spanning vendors:
-        # a same-vendor fallback shares the quota that just failed.
-        #
-        #   groq   llama-3.3-70b-versatile   219-420ms  primary, full sentences
-        #   gemini gemini-flash-lite-latest  962-1836ms different vendor
-        #   groq   openai/gpt-oss-20b        672-687ms  different model family
-        #   openrouter gemma-4-26b:free      6.7-9.0s   slow, but a 4th vendor
-        #
-        # Dropped after measuring: qwen3.6-27b (HTTP 400 on Marathi) and
-        # nvidia/muse-glimmer-30b (empty response on Marathi). Half this corpus is
-        # Marathi, so a model that fails on it is not a fallback.
+        primary_provider = os.getenv("LLM_PROVIDER", "groq").lower()
+        primary_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b") if primary_provider == "groq" else None
+        chain = [LLMClient(provider=primary_provider, model=primary_model)]
+
         spec = os.getenv(
             "LLM_FALLBACK_CHAIN",
-            "gemini:gemini-flash-lite-latest,"
-            "groq:openai/gpt-oss-20b,"
-            "openrouter:google/gemma-4-26b-a4b-it:free",
+            "groq:openai/gpt-oss-20b,gemini:gemini-flash-lite-latest,groq:groq/compound-mini",
         )
         for entry in (e.strip() for e in spec.split(",") if e.strip()):
             provider, _, model = entry.partition(":")
@@ -483,7 +502,9 @@ class LLMChain:
                 continue
             if c.configured:
                 chain.append(c)
-        return cls(chain)
+
+        racing = os.getenv("LLM_RACING", "true").lower() in ("true", "1", "yes")
+        return cls(chain, racing=racing)
 
     @property
     def provider(self) -> str:
@@ -534,38 +555,71 @@ class LLMChain:
         """
         return self.generate(question, [], system=UNSOURCED_PROMPT, retries=0)
 
-    def generate(self, question: str, contexts: list[str], **kw) -> GenerationResult:
-        """Try providers in order, skipping any still cooling down.
+    def rewrite_query(self, query: str) -> str:
+        """Speculative query rewriting using fastest model race."""
+        prompt = (
+            f"Rewrite the following user query into a concise multilingual search query.\n"
+            f"Preserve all keywords and named entities. Return ONLY the rewritten query text:\n\n{query}"
+        )
+        res = self.generate(
+            prompt,
+            [],
+            system="You are a search query expansion assistant. Return ONLY the search query text.",
+            max_tokens=60,
+        )
+        if res.ok and res.answer:
+            return res.answer.strip()
+        return query
 
-        A provider that just returned 429 will almost certainly return 429 again
-        a second later, so re-trying it costs latency and buys nothing. After a
-        failure it is skipped until its cooldown expires; quota errors get 60s
-        (per-minute windows), permanent ones 10 minutes.
+    def generate(self, question: str, contexts: list[str], **kw) -> GenerationResult:
+        """Generate answer using Model Racing (parallel speculative execution) when enabled.
+
+        Sends tasks concurrently across all eligible candidate models and accepts
+        whichever finishes first, eliminating single-model latency spikes.
         """
         now = time.time()
+        eligible = [(i, c) for i, c in enumerate(self.clients) if self._cooldown_until.get(i, 0.0) <= now]
+
+        if not eligible and self.clients:
+            return self.clients[0].generate(question, contexts, retries=0)
+
+        # Model Racing: Speculative parallel execution
+        if self.racing and len(eligible) > 1:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(eligible)) as executor:
+                future_to_client = {
+                    executor.submit(
+                        c.generate,
+                        question,
+                        contexts,
+                        retries=0,
+                        **(kw if "system" in kw else {}),
+                    ): (i, c)
+                    for i, c in eligible
+                }
+
+                last_res = GenerationResult()
+                for future in concurrent.futures.as_completed(future_to_client):
+                    i, c = future_to_client[future]
+                    key = f"{c.provider}:{c.model}"
+                    try:
+                        res: GenerationResult = future.result()
+                        if res.ok:
+                            self._served[key] = self._served.get(key, 0) + 1
+                            self._cooldown_until.pop(i, None)
+                            return res
+                        else:
+                            self._cooldown_until[i] = now + self._cooldown_for(res.error)
+                            last_res = res
+                    except Exception as e:
+                        self._cooldown_until[i] = now + self._cooldown_for(str(e))
+                        last_res = GenerationResult(provider=c.provider, model=c.model, error=str(e))
+
+                return last_res
+
+        # Sequential fallback
         last = GenerationResult()
-        tried_any = False
-
-        for i, c in enumerate(self.clients):
+        for i, c in eligible:
             key = f"{c.provider}:{c.model}"
-            if self._cooldown_until.get(i, 0.0) > now:
-                self._skipped[key] = self._skipped.get(key, 0) + 1
-                continue
-            tried_any = True
-
-            # Retries only make sense when there is nothing else to try.
-            #
-            # The primary used to retry rate limits with a 3s x attempt backoff,
-            # which is correct for a per-minute quota when it is the only
-            # provider. With a live chain it is backwards: measured, a throttled
-            # Gemini spent ~10s backing off before falling through, while the
-            # next provider answers in ~2s. The user waits five times longer for
-            # a worse outcome.
-            #
-            # So retries are reserved for the sole-provider case; whenever an
-            # alternative exists, switching beats waiting. The cooldown above
-            # then keeps the throttled provider out of the path for 60s rather
-            # than paying that cost again on the next query.
             solo = len(self.clients) == 1
             r = c.generate(question, contexts, **(kw if (solo and i == 0) else ({"retries": 0} | kw)))
             if r.ok:
@@ -576,11 +630,4 @@ class LLMChain:
             self._cooldown_until[i] = now + self._cooldown_for(r.error)
             last = r
 
-        # Everything is cooling down. Rather than fail outright, make one
-        # best-effort attempt on the primary -- a cooldown is a heuristic, and
-        # the caller still has the extractive answer if this fails too.
-        if not tried_any and self.clients:
-            last = self.clients[0].generate(question, contexts, retries=0)
-            if last.ok:
-                self._cooldown_until.pop(0, None)
         return last

@@ -159,7 +159,11 @@ def _answer_payload(r) -> dict:
         "generated_answer": r.generated_answer,
         "support": r.support,
         "grounding": r.grounding,
-        "citations": r.citations,
+        "citations": [
+            {"unit_id": c.unit_id, "span_start": c.span_start, "span_end": c.span_end, "text": c.text}
+            if hasattr(c, "unit_id") else {"passage_index": c}
+            for c in r.citations
+        ],
         "sources": [
             {"unit_id": s.unit_id, "text": s.text, "score": s.score,
              "contributors": s.contributors}
