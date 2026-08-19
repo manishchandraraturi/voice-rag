@@ -188,7 +188,7 @@ class ChunkIndex:
         )
 
     @classmethod
-    def load(cls, root: Path, strategy: str, ef_search: int = 96) -> ChunkIndex:
+    def load(cls, root: Path, strategy: str, ef_search: int = 32) -> ChunkIndex:
         d = root / strategy
         with (d / "meta.pkl").open("rb") as f:
             meta = pickle.load(f)

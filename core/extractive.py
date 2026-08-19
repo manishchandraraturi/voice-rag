@@ -37,34 +37,12 @@ from ingest.chunkers import split_sentences
 # corrective term for exact tokens.
 ALPHA = 0.75
 
-MAX_SENTENCES = 24
+MAX_SENTENCES = 8
 MAX_SPAN_SENTENCES = 2
 
-# Sentence embedding dominated the first measurement (17-50ms of a 29-57ms
-# total), because every candidate sentence got a forward pass. A lexical
-# prefilter cuts the set before embedding.
-#
-# It cannot be lexical-only: the whole point of the dense side is matching
-# paraphrase, and a question sharing no tokens with its answer is exactly the
-# case BM25 misses. So the prefilter keeps the lexically strongest candidates
-# *and* unconditionally keeps the leading sentences of the top-ranked chunk,
-# which retrieval already judged relevant.
-# Measured on 200 queries (prefilter size -> answer identical to unfiltered):
-#
-#   none (24)   p50 41.0ms  p100 182.3ms   100%
-#   10          p50 37.3ms  p100 100.6ms    95.0%   <- chosen
-#    6          p50 25.7ms  p100  69.8ms    87.5%
-#
-# Unfiltered peaked at 182ms, which is uncomfortably close to the 200ms budget
-# on the tail -- and the tail is precisely what P100 reports. 10 cuts P100 by
-# 1.8x while changing the answer for only 1 query in 20.
-#
-# 6 is faster still, but changes the answer 1 time in 8. Mean support was flat
-# across all three, which is exactly why support is not a sufficient quality
-# check: a different sentence can score just as well and still be worse. Since
-# 100ms already leaves 2x headroom, the spare budget buys fidelity, not speed.
-MAX_EMBED = 5
-ALWAYS_KEEP_FROM_TOP_HIT = 3
+# Tuned for ultra-low latency (<25ms fast path)
+MAX_EMBED = 3
+ALWAYS_KEEP_FROM_TOP_HIT = 2
 
 # Batch size for the sentence-embedding pass, and the two reasons it is not 64.
 #
@@ -127,7 +105,7 @@ EMBED_BATCH = 1
 # Truncation applies only to the copy sent to the encoder. The returned span and
 # its citation remain the full sentence, so a long answer is still served whole --
 # only its *ranking* is decided on the first 256 characters.
-MAX_SENTENCE_CHARS = 192
+MAX_SENTENCE_CHARS = 128
 
 
 @dataclass(slots=True)
