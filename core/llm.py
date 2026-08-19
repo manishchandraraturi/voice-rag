@@ -182,8 +182,8 @@ class LLMClient:
             self.base_url = "https://integrate.api.nvidia.com/v1"
         elif self.provider == "groq":
             # Groq runs on LPUs and returns in a few hundred ms.
-            # Default is openai/gpt-oss-120b — available on this Groq account, LPU-accelerated.
-            self.model = model or os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+            # llama-3.3-70b-versatile is the sweet spot: fast LPU inference + high quality.
+            self.model = model or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
             self.api_key = os.getenv("GROQ_API_KEY", "")
             self.base_url = "https://api.groq.com/openai/v1"
         elif self.provider == "bedrock":
@@ -485,12 +485,12 @@ class LLMChain:
         to eliminate single-model latency spikes and cloud jitter.
         """
         primary_provider = os.getenv("LLM_PROVIDER", "groq").lower()
-        primary_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b") if primary_provider == "groq" else None
+        primary_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile") if primary_provider == "groq" else None
         chain = [LLMClient(provider=primary_provider, model=primary_model)]
 
         spec = os.getenv(
             "LLM_FALLBACK_CHAIN",
-            "groq:openai/gpt-oss-20b,groq:qwen/qwen3.6-27b,groq:groq/compound-mini",
+            "groq:llama-3.1-8b-instant,groq:llama3-70b-8192",
         )
         for entry in (e.strip() for e in spec.split(",") if e.strip()):
             provider, _, model = entry.partition(":")

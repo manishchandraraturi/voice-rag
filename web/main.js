@@ -228,7 +228,7 @@ function renderAnswer(d, tier, questionText) {
         ${formatTurnCard(d, tier)}
       </div>
     `;
-    convoItems.prepend(turnEl);
+    convoItems.appendChild(turnEl);
   } else {
     const cardEl = document.getElementById(`card_${currentTurnId}`);
     if (cardEl) {
@@ -236,7 +236,7 @@ function renderAnswer(d, tier, questionText) {
     }
   }
 
-  turnEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  turnEl.scrollIntoView({ block: 'end', behavior: 'smooth' });
 }
 
 /* ───────────────────────── ask ───────────────────────── */
@@ -253,44 +253,54 @@ async function ask(question) {
   const turnId = 'turn_' + Date.now();
 
   try {
-    // Tier 1 — Extractive Fast Path
-    const fast = await api('/ask', {
+    // Fire BOTH calls in parallel — fast path shows immediately,
+    // LLM generation runs simultaneously in background
+    const fastPromise = api('/ask', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, generate: false }),
     });
+    const fullPromise = api('/ask', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, generate: true }),
+    });
+
+    // Show fast answer as soon as it arrives
+    const fast = await fastPromise;
     fast._turnId = turnId;
 
-    const willGenerate = !['refusal', 'greeting'].includes(fast.answer_source);
     const isAbstain = fast.answer_source === 'abstain';
+    const isTerminal = ['refusal', 'greeting'].includes(fast.answer_source);
 
-    // Only show Tier 1 immediately if it has a real answer (not abstain)
+    if (isTerminal) {
+      renderAnswer(fast, 'idle', question);
+      $('#hint').textContent = `answered in ${ms(fast.fast_path_ms)}`;
+      busy = false;
+      return;
+    }
+
     if (!isAbstain) {
-      renderAnswer(fast, willGenerate ? 'pending' : 'idle', question);
-      $('#hint').textContent = `answered in ${ms(fast.fast_path_ms)} — fast path completed`;
+      renderAnswer(fast, 'pending', question);
+      $('#hint').textContent = `answered in ${ms(fast.fast_path_ms)} — polishing…`;
     } else {
       $('#hint').textContent = `searching deeper… (fast path ${ms(fast.fast_path_ms)})`;
     }
     pulse(0.5);
 
-    // Tier 2 — LLM Polish / General Knowledge
-    if (willGenerate) {
-      try {
-        const full = await api('/ask', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question, generate: true }),
-        });
-        full._turnId = turnId;
-        renderAnswer(full, (full.answer_source === 'generated' || full.answer_source === 'general_knowledge') ? 'generated' : 'idle', question);
-        $('#hint').textContent =
-          full.answer_source === 'generated'
-            ? `polished in ${ms(full.total_ms)} · fast answer stood at ${ms(full.fast_path_ms)}`
-            : full.answer_source === 'general_knowledge'
-              ? `answered from model knowledge in ${ms(full.total_ms)}`
-              : `answered in ${ms(full.fast_path_ms)}`;
-      } catch {
-        if (isAbstain) renderAnswer(fast, 'idle', question);
-        $('#hint').textContent = 'generation unavailable — extracted answer stands';
-      }
+    // Now await the full/generated answer (already running in parallel)
+    try {
+      const full = await fullPromise;
+      full._turnId = turnId;
+      const src = full.answer_source;
+      renderAnswer(full, (src === 'generated' || src === 'general_knowledge') ? 'generated' : 'idle', question);
+      $('#hint').textContent =
+        src === 'generated'
+          ? `polished in ${ms(full.total_ms)} · fast path ${ms(full.fast_path_ms)}`
+          : src === 'general_knowledge'
+            ? `model knowledge · ${ms(full.total_ms)}`
+            : `answered in ${ms(full.fast_path_ms)}`;
+    } catch {
+      if (isAbstain) renderAnswer(fast, 'idle', question);
+      $('#hint').textContent = 'generation unavailable — extracted answer stands';
     }
   } catch (e) {
     $('#hint').classList.add('err');
