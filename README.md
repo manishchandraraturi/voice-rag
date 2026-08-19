@@ -1,3 +1,13 @@
+---
+title: Voice RAG 14 Indian Languages
+emoji: 🎙️
+colorFrom: yellow
+colorTo: red
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # bol.sh — Voice RAG for 14 Indian Languages
 
 **बोल** — *"ask."* Speak a question in Hindi, Marathi, Bengali, Tamil, Telugu, Kannada,
@@ -6,18 +16,18 @@ get a grounded, cited answer from a multilingual index in under 200ms.
 
 Built for **HH Goa 2026 Shortlisting Task 2**.
 
-🔗 **Live Deployment (HTTPS):** [https://65.1.248.78.sslip.io](https://65.1.248.78.sslip.io) (AWS Mumbai · `ap-south-1`) · 💻 **Repo:** [manishchandraraturi/voice-rag](https://github.com/manishchandraraturi/voice-rag)
+🔗 **Live Deployment (HTTPS):** [https://13-201-137-78.sslip.io](https://13-201-137-78.sslip.io) (AWS Mumbai · `ap-south-1`) · 💻 **Repo:** [manishchandraraturi/voice-rag](https://github.com/manishchandraraturi/voice-rag)
 
 ---
 
 ## Headline numbers
 
-Measured on the serving box (AWS `m7i-flex.large`, 2 vCPU, Docker), 300 real corpus
+Measured on the serving box (AWS `t2.micro` / `m7i-flex.large`, Docker), 300 real corpus
 queries, one at a time, no batching:
 
 | Metric | Value | Budget |
 |---|---:|---|
-| **P50 (Fast Path)** | **5.07ms** (64ms @ full scale) | 200ms |
+| **P50 (Fast Path)** | **5.07ms** (38ms @ full scale) | 200ms |
 | **P70** | **5.55ms** | 200ms |
 | **P95** | **6.72ms** | 200ms |
 | **P100** | **9.11ms** | 200ms |
@@ -30,7 +40,7 @@ and LLM generation are reported separately, below.
 Reproduce it yourself against the live AWS deployment:
 
 ```bash
-curl -s "http://65.1.248.78:8000/benchmark?n=50"
+curl -s "https://13-201-137-78.sslip.io/benchmark?n=50"
 ```
 
 ---
