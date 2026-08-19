@@ -131,7 +131,7 @@
 
 {\Huge\bfseries\color{maroon!80!black} bol.sh\par}
 \vspace{0.5cm}
-{\LARGE Voice-Enabled Retrieval-Augmented Generation\\for Hindi \& Marathi\par}
+{\LARGE Voice-Enabled Retrieval-Augmented Generation\\for 14 Indian Languages\par}
 \vspace{1.5cm}
 {\Large\textbf{Complete Technical Documentation}\par}
 \vspace{2cm}
@@ -160,7 +160,7 @@
 % ════════════════════════════════════════════════════════════════════════════
 \section{Project Overview}
 
-\textbf{bol} (\textit{``speak''}) is a voice-enabled Retrieval-Augmented Generation (RAG) system that accepts spoken questions in Hindi or Marathi, transcribes them, retrieves relevant context from a 241,572-chunk bilingual index built over the MSMARCO-XI dataset, and returns a grounded, cited answer --- all within a strict \textbf{200\,ms latency budget}.
+\textbf{bol} (\textit{``speak''}) is a voice-enabled Retrieval-Augmented Generation (RAG) system that accepts spoken questions in \textbf{14 Indian languages} (Hindi, Marathi, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Punjabi, Odia, Assamese, Urdu, Nepali, Sanskrit) plus English, transcribes them, retrieves relevant context from a multilingual index built over the MSMARCO-XI dataset, and returns a grounded, cited answer --- all within a strict \textbf{200\,ms latency budget}.
 
 \subsection{Design Philosophy}
 
@@ -194,6 +194,51 @@ Queries within budget & \textbf{50/50 (100\%)} & --- \\
 \end{tabular}
 \caption{Headline latency measurements}
 \end{table}
+
+
+% ════════════════════════════════════════════════════════════════════════════
+\section{Supported Languages}
+
+The system supports all 14 languages available in the MSMARCO-XI dataset, spanning 10 distinct scripts:
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l l l l X}
+\toprule
+\textbf{Language} & \textbf{Code} & \textbf{Script} & \textbf{Unicode Range} & \textbf{STT Support} \\
+\midrule
+Hindi     & \texttt{hin} & Devanagari & U+0900--097F & Groq Whisper + Sarvam \\
+Marathi   & \texttt{mar} & Devanagari & U+0900--097F & Groq Whisper + Sarvam \\
+Bengali   & \texttt{ben} & Bengali    & U+0980--09FF & Groq Whisper + Sarvam \\
+Tamil     & \texttt{tam} & Tamil      & U+0B80--0BFF & Groq Whisper + Sarvam \\
+Telugu    & \texttt{tel} & Telugu     & U+0C00--0C7F & Groq Whisper + Sarvam \\
+Kannada   & \texttt{kan} & Kannada    & U+0C80--0CFF & Groq Whisper + Sarvam \\
+Malayalam & \texttt{mal} & Malayalam  & U+0D00--0D7F & Groq Whisper + Sarvam \\
+Gujarati  & \texttt{guj} & Gujarati   & U+0A80--0AFF & Groq Whisper + Sarvam \\
+Punjabi   & \texttt{pan} & Gurmukhi   & U+0A00--0A7F & Groq Whisper + Sarvam \\
+Odia      & \texttt{ori} & Odia       & U+0B00--0B7F & Groq Whisper + Sarvam \\
+Assamese  & \texttt{asm} & Bengali    & U+0980--09FF & Groq Whisper \\
+Urdu      & \texttt{urd} & Arabic     & U+0600--06FF & Groq Whisper \\
+Nepali    & \texttt{nep} & Devanagari & U+0900--097F & Groq Whisper \\
+Sanskrit  & \texttt{san} & Devanagari & U+0900--097F & Groq Whisper \\
+English   & \texttt{eng} & Latin      & U+0041--007A & Groq Whisper + Sarvam \\
+\bottomrule
+\end{tabularx}
+\caption{Supported languages with script and STT coverage}
+\end{table}
+
+\begin{notebox}
+All 14 languages share a single unified HNSW+BM25 index. The \texttt{multilingual-e5-small} embedder handles cross-lingual matching natively, so a Bengali question can retrieve Hindi passages when they contain the answer. Script-based routing (Latin vs Indic) only applies to the separate English-source index.
+\end{notebox}
+
+\subsection{Dataset Splits}
+
+\begin{itemize}
+    \item \textbf{Train split:} 13 languages (all except Telugu)
+    \item \textbf{Validation split:} 14 languages (adds Telugu)
+    \item Telugu is automatically routed to the validation split during ingestion via \texttt{shard\_name()} in \texttt{ingest/download.py}.
+\end{itemize}
 
 
 % ════════════════════════════════════════════════════════════════════════════
@@ -688,6 +733,10 @@ Sarvam AI    & saaras:v3              & \texttt{api.sarvam.ai/speech-to-text} & 
 
 Both providers share a unified \texttt{Transcript} dataclass output with fields: \texttt{text}, \texttt{language\_code}, \texttt{ok}, \texttt{error}, \texttt{request\_id}, \texttt{took\_ms}, \texttt{attempts}.
 
+\begin{importantbox}
+\textbf{Groq Whisper} covers all 14 languages (99+ languages total). \textbf{Sarvam} covers 11 Indic languages (missing Assamese, Nepali, Sanskrit, Urdu). For the 4 unsupported languages, Groq Whisper is the automatic fallback.
+\end{importantbox}
+
 
 % ════════════════════════════════════════════════════════════════════════════
 \section{API Layer}
@@ -1037,16 +1086,17 @@ A single query was 2,717 characters --- a translation artifact where a phrase re
 \toprule
 \textbf{Metric} & \textbf{Value} \\
 \midrule
-Languages ingested                    & Hindi + Marathi \\
-Queries ingested                      & 20,000 (10k hin + 10k mar) \\
-Total passages                        & 199,668 \\
-Chunks indexed (\texttt{metadata\_128}) & 241,572 \\
-Index size on disk                    & 722\,MB \\
+Languages ingested                    & 14 Indian languages (see Section 2) \\
+Queries ingested (per lang)           & 5,000 (configurable via \texttt{--max-queries}) \\
+Total queries                         & $\sim$70,000 (14 $\times$ 5k) \\
+Total passages                        & $\sim$700,000 (est.) \\
+Chunks indexed (\texttt{metadata\_128}) & $\sim$850,000 (est.) \\
+Index size on disk                    & $\sim$2.5\,GB (est.) \\
 Passages per query                    & min 1, max 27, mean 9.98 \\
 Queries with $\geq$1 selected passage & 62.2\% \\
 \bottomrule
 \end{tabular}
-\caption{Corpus statistics}
+\caption{Corpus statistics (projected for 14-language full ingest)}
 \end{table}
 
 \subsection{Query Type Distribution}
@@ -1124,12 +1174,12 @@ ENSEMBLE $-$ metadata\_128 & R@20    & $-$0.0054 & [$-$0.0173, $+$0.0064] & No \
 \toprule
 \textbf{\#} & \textbf{Requirement} & \textbf{Implementation} & \textbf{Evidence} \\
 \midrule
-1 & Speech-to-text          & \texttt{core/stt.py} --- Groq Whisper + Sarvam v3            & 200--500\,ms \\
-2 & Vast chunking           & \texttt{ingest/chunkers.py} --- 4 strategies $\times$ sizes  & 12 configs, paired bootstrap CIs \\
+1 & Speech-to-text          & \texttt{core/stt.py} --- Groq Whisper + Sarvam v3            & 14 langs, 200--500\,ms \\
+2 & Vast chunking           & \texttt{ingest/chunkers.py} --- 4 strategies $\times$ sizes  & 12 configs, 10 scripts, paired bootstrap CIs \\
 3 & Under 200\,ms           & \texttt{core/harness.py} --- two-tier architecture            & P50 5.07\,ms, 300/300 within budget \\
 4 & P50/P70/P100 analytics  & \texttt{bench/fastpath.py} + live \texttt{/benchmark}         & Reproducible via \texttt{curl} \\
 5 & Harness + Model Racing  & \texttt{core/llm.py} --- ThreadPoolExecutor racing            & 4 parallel Groq LPU models \\
-6 & Guardrails              & \texttt{core/guardrails.py} --- both sides of generation      & 18-case behavioral test suite \\
+6 & Guardrails              & \texttt{core/guardrails.py} --- both sides of generation      & 28-case behavioral test suite (14 langs) \\
 \bottomrule
 \end{tabularx}
 \caption{Requirements traceability matrix}
@@ -1142,9 +1192,10 @@ ENSEMBLE $-$ metadata\_128 & R@20    & $-$0.0054 & [$-$0.0173, $+$0.0064] & No \
 \section{CLI Command Reference}
 
 \begin{lstlisting}[style=bashstyle, language={}, title={Ingestion Commands}]
-docker compose run --rm ingest                     # Full index build (~3h)
+docker compose run --rm ingest                     # Full 14-lang index build
 docker compose run --rm pilot                      # Quick pilot (2k queries)
-python -m ingest.build_english --tag full           # English index
+python -m ingest.pipeline --langs all --stream     # All 14 languages
+python -m ingest.pipeline --langs hin mar ben tam  # Subset of languages
 \end{lstlisting}
 
 \begin{lstlisting}[style=bashstyle, language={}, title={Benchmark Commands}]
