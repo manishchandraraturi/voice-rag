@@ -167,7 +167,9 @@ function formatTurnCard(d, tier) {
   if (d.fast_path_ms != null) chips.push(`<span class="detail-chip">⚡ latency: ${ms(d.fast_path_ms)}</span>`);
   if (d.support   != null && src !== 'general_knowledge') chips.push(`<span class="detail-chip">support: ${d.support.toFixed(2)}</span>`);
   if (d.grounding != null && src !== 'general_knowledge') chips.push(`<span class="detail-chip">grounding: ${d.grounding.toFixed(2)}</span>`);
-  if (d.citations?.length) chips.push(`<span class="detail-chip good">cited [${d.citations.join(', ')}]</span>`);
+  
+  const citList = (Array.isArray(d.citations) ? d.citations : []).map(c => typeof c === 'object' ? (c.passage ?? c.id ?? Object.values(c)[0] ?? 1) : c).filter(Boolean);
+  if (citList.length) chips.push(`<span class="detail-chip good">cited [${citList.join(', ')}]</span>`);
   
   if (tier === 'generated' && d.total_ms) {
     chips.push(`<span class="detail-chip good">✨ LLM: ${ms(d.total_ms)}</span>`);
@@ -228,7 +230,7 @@ function renderAnswer(d, tier, questionText) {
         ${formatTurnCard(d, tier)}
       </div>
     `;
-    convoItems.appendChild(turnEl);
+    convoItems.prepend(turnEl);
   } else {
     const cardEl = document.getElementById(`card_${currentTurnId}`);
     if (cardEl) {
@@ -236,11 +238,8 @@ function renderAnswer(d, tier, questionText) {
     }
   }
 
-  turnEl.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  turnEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
-
-/* ───────────────────────── ask ───────────────────────── */
-let busy = false;
 
 async function ask(question) {
   question = (question || '').trim();
