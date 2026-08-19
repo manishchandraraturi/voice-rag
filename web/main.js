@@ -130,8 +130,7 @@ api('/health').then((h) => {
     `${h.total_chunks.toLocaleString()} chunks · ${h.serving.join('+')}`;
   $('#footHost').textContent = `${h.embedder_variant} · ${h.index_tag}`;
   if (!h.stt_configured) {
-    $('#micBtn').disabled = true;
-    $('#hint').textContent = 'Voice disabled — no STT key on this server. Typing works.';
+    $('#hint').textContent = 'Note: Set STT API key for voice transcription. Typing works.';
   }
 }).catch(() => {
   $('#chipIndex').querySelector('span').textContent = 'server unreachable';
@@ -229,7 +228,7 @@ function renderAnswer(d, tier, questionText) {
         ${formatTurnCard(d, tier)}
       </div>
     `;
-    convoItems.appendChild(turnEl);
+    convoItems.prepend(turnEl);
   } else {
     const cardEl = document.getElementById(`card_${currentTurnId}`);
     if (cardEl) {
@@ -237,7 +236,7 @@ function renderAnswer(d, tier, questionText) {
     }
   }
 
-  turnEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  turnEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 /* ───────────────────────── ask ───────────────────────── */
@@ -293,10 +292,12 @@ async function ask(question) {
   }
 }
 
-$('#askBtn').onclick = () => ask($('#q').value);
-$('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask($('#q').value); });
-$('#closeAns').onclick = () => {
-  shell.hidden = true;
+const askBtnEl = $('#askBtn');
+if (askBtnEl) askBtnEl.onclick = () => ask($('#q').value);
+const qEl = $('#q');
+if (qEl) qEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') ask($('#q').value); });
+const closeAnsBtn = $('#closeAns');
+if (closeAnsBtn) closeAnsBtn.onclick = () => {
   document.body.classList.remove('answered');
 };
 document.querySelectorAll('.sample').forEach((b) => {
@@ -326,10 +327,13 @@ function encodeWav(samples, rate) {
 }
 
 async function toWav(blob) {
+  if (!blob || blob.size < 50) {
+    throw new Error('Recording was too short, please speak clearly');
+  }
   const ac = new (window.AudioContext || window.webkitAudioContext)();
   const decoded = await ac.decodeAudioData(await blob.arrayBuffer());
   const rate = 16000;
-  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * rate), rate);
+  const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(decoded.duration * rate)), rate);
   const src = off.createBufferSource();
   src.buffer = decoded; src.connect(off.destination); src.start();
   const out = await off.startRendering();
@@ -338,19 +342,17 @@ async function toWav(blob) {
 }
 
 /* ── Realtime Symmetrical Audio Waveform Visualizer ── */
-const waveCanvas = document.getElementById('voiceWave');
-const waveCtx = waveCanvas ? waveCanvas.getContext('2d') : null;
-const voiceModal = document.getElementById('voiceModal');
+let waveAnimFrame = 0;
 
 function drawVoiceWave() {
-  if (!analyser || !waveCtx || !waveCanvas) return;
-  const bufferLength = analyser.frequencyBinCount;
-  const dataArray = new Uint8Array(bufferLength);
-  analyser.getByteFrequencyData(dataArray);
+  const canvas = document.getElementById('voiceWave');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
 
-  const w = waveCanvas.width;
-  const h = waveCanvas.height;
-  waveCtx.clearRect(0, 0, w, h);
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
 
   const numBars = 36;
   const barWidth = 3.5;
@@ -359,30 +361,46 @@ function drawVoiceWave() {
   const startX = (w - totalWidth) / 2;
   const centerY = h / 2;
 
+  let dataArray = null;
+  let bufferLength = 0;
+  if (analyser) {
+    bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
+    analyser.getByteFrequencyData(dataArray);
+  }
+
+  const t = performance.now() * 0.005;
+
   for (let i = 0; i < numBars; i++) {
     // Symmetrical distance from center
     const dist = Math.abs(i - numBars / 2) / (numBars / 2);
-    const dataIdx = Math.floor((1 - dist * 0.7) * (bufferLength / 4));
-    const val = dataArray[dataIdx] || 0;
+    let val = 0;
+    if (dataArray && bufferLength > 0) {
+      const dataIdx = Math.floor((1 - dist * 0.7) * (bufferLength / 4));
+      val = dataArray[dataIdx] || 0;
+    } else {
+      // Idle undulating sine wave animation
+      val = (Math.sin(t + i * 0.3) * 0.5 + 0.5) * 45;
+    }
 
-    // Symmetrical vertical bar height with breathing minimum
-    const minHeight = 4;
-    const barHeight = Math.max(minHeight, (val / 255) * (h * 0.85) * (1 - dist * 0.35));
+    // Symmetrical vertical bar height
+    const minHeight = 5;
+    const barHeight = Math.max(minHeight, (val / 255) * (h * 0.88) * (1 - dist * 0.35) + Math.sin(t * 2 + i) * 3);
 
     const x = startX + i * (barWidth + gap);
     const y = centerY - barHeight / 2;
 
-    const alpha = Math.max(0.35, Math.min(1, val / 180 + 0.2));
-    waveCtx.fillStyle = `rgba(224, 167, 51, ${alpha})`;
+    const alpha = Math.max(0.4, Math.min(1, val / 160 + 0.3));
+    ctx.fillStyle = `rgba(224, 167, 51, ${alpha})`;
     
     // Draw rounded vertical bar
-    waveCtx.beginPath();
-    if (waveCtx.roundRect) {
-      waveCtx.roundRect(x, y, barWidth, barHeight, 2);
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(x, y, barWidth, barHeight, 2);
     } else {
-      waveCtx.rect(x, y, barWidth, barHeight);
+      ctx.rect(x, y, barWidth, barHeight);
     }
-    waveCtx.fill();
+    ctx.fill();
   }
 }
 
@@ -400,35 +418,70 @@ function meter() {
   meterRAF = requestAnimationFrame(meter);
 }
 
+function openVoiceModal() {
+  const modal = document.getElementById('voiceModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+    const vs = document.getElementById('voiceStatus'); if (vs) vs.textContent = 'Listening… speak now';
+    const sub = document.getElementById('voiceSubtext'); if (sub) sub.textContent = 'Tap mic in center to finish & answer';
+  }
+  const btn = document.getElementById('micBtn');
+  if (btn) btn.classList.add('rec');
+  drawVoiceWave();
+}
+
+function closeVoiceModal() {
+  if (recorder && recorder.state === 'recording') {
+    try { recorder.stop(); } catch {}
+  }
+  const modal = document.getElementById('voiceModal');
+  if (modal) {
+    modal.classList.remove('active');
+    modal.style.display = 'none';
+  }
+  const btn = document.getElementById('micBtn');
+  if (btn) btn.classList.remove('rec');
+}
+
 function stopVoiceRecording() {
   if (recorder && recorder.state === 'recording') {
-    recorder.stop();
+    try { recorder.stop(); } catch {}
+  } else {
+    closeVoiceModal();
   }
 }
 
-async function startVoiceRecording() {
-  const btn = $('#micBtn');
+async function startVoiceRecording(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const btn = document.getElementById('micBtn');
   if (recorder && recorder.state === 'recording') {
     stopVoiceRecording();
     return;
   }
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    $('#hint').classList.add('err');
-    $('#hint').textContent = 'Microphone requires HTTPS or localhost. Test via HTTPS or http://localhost:8000';
+    const hint = document.getElementById('hint');
+    if (hint) {
+      hint.classList.add('err');
+      hint.textContent = 'Microphone requires HTTPS or http://localhost:8000';
+    }
     return;
   }
 
   try {
+    // Get mic stream FIRST (before showing modal) — avoids permission flash
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Only open modal AFTER permission is granted
+    openVoiceModal();
     chunks = [];
 
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
     audioCtx.createMediaStreamSource(stream).connect(analyser);
-    meter();
 
+    meter();
     recorder = new MediaRecorder(stream);
     recorder.ondataavailable = (e) => chunks.push(e.data);
 
@@ -439,14 +492,14 @@ async function startVoiceRecording() {
       audioCtx?.close();
       audioCtx = null;
       btn.classList.remove('rec');
-      if (voiceModal) voiceModal.hidden = true;
+      closeVoiceModal();
       $('#hint').textContent = 'transcribing…';
 
       try {
         const wav = await toWav(new Blob(chunks, { type: chunks[0]?.type || 'audio/webm' }));
         const fd = new FormData();
         fd.append('audio', wav, 'question.wav');
-        fd.append('generate', 'true');
+        fd.append('generate', 'false');
         const d = await api('/voice', { method: 'POST', body: fd });
 
         if (!d.stt_ok || !d.transcript) {
@@ -455,9 +508,9 @@ async function startVoiceRecording() {
           return;
         }
         $('#q').value = d.transcript;
-        renderAnswer(d, d.answer_source === 'generated' ? 'generated' : 'idle', d.transcript);
+        $('#q').focus();
         $('#hint').textContent =
-          `heard “${d.transcript}” · STT ${ms(d.stt_ms)} (outside budget) · answer ${ms(d.fast_path_ms)}`;
+          `heard "${esc(d.transcript)}" · STT ${ms(d.stt_ms)} — press Enter or ➜ to submit`;
       } catch (e) {
         $('#hint').classList.add('err');
         $('#hint').textContent = e.message;
@@ -466,19 +519,37 @@ async function startVoiceRecording() {
 
     recorder.start();
     btn.classList.add('rec');
-    if (voiceModal) voiceModal.hidden = false;
     $('#hint').classList.remove('err');
-    $('#hint').textContent = 'listening — tap mic to finish & answer';
+    $('#hint').textContent = 'listening — tap mic to finish';
   } catch (e) {
-    if (voiceModal) voiceModal.hidden = true;
+    const vs = $('#voiceStatus'); if (vs) vs.textContent = 'Microphone access blocked';
+    const sub = $('#voiceSubtext'); if (sub) sub.textContent = 'Please allow microphone access';
     $('#hint').classList.add('err');
     $('#hint').textContent = `microphone blocked — ${esc(e.message)}`;
   }
 }
 
-$('#micBtn').onclick = startVoiceRecording;
+const micBtn = $('#micBtn');
+if (micBtn) micBtn.onclick = startVoiceRecording;
+
 const modalBtn = document.getElementById('voiceModalBtn');
 if (modalBtn) modalBtn.onclick = stopVoiceRecording;
+
+const closeVoiceBtn = document.getElementById('closeVoiceModal');
+if (closeVoiceBtn) closeVoiceBtn.onclick = closeVoiceModal;
+
+{
+  const vm = document.getElementById('voiceModal');
+  if (vm) {
+    vm.onclick = (e) => {
+      if (e.target === vm) closeVoiceModal();
+    };
+  }
+}
+
+window.startVoiceRecording = startVoiceRecording;
+window.stopVoiceRecording = stopVoiceRecording;
+window.closeVoiceModal = closeVoiceModal;
 
 /* ───────────────────────── live benchmark ───────────────────────── */
 function countTo(el, target, decimals = 0, dur = 1100) {
@@ -558,4 +629,4 @@ $('#cmpBtn').onclick = async () => {
   } catch (e) {
     btn.textContent = 'comparison failed — retry';
   }
-};
+};

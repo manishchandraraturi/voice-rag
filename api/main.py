@@ -31,6 +31,10 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -63,11 +67,14 @@ COMPARE = FULL_ENSEMBLE
 def _create_stt():
     """Select STT provider: Groq Whisper when configured, else Sarvam."""
     provider = os.getenv("STT_PROVIDER", "").lower()
-    if provider == "groq":
+    if provider == "groq" or os.getenv("GROQ_API_KEY"):
         stt = GroqSTT()
         if stt.configured:
             return stt
-    return SarvamSTT()
+    stt = SarvamSTT()
+    if stt.configured:
+        return stt
+    return GroqSTT()
 
 
 STATE: dict = {}
