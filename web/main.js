@@ -160,7 +160,10 @@ function formatTurnCard(d, tier) {
   const src = d.answer_source;
   if (src === 'refusal')            chips.push(`<span class="detail-chip bad">⛔ refused · ${esc(d.reason || 'unsafe intent')}</span>`);
   else if (src === 'greeting')      chips.push(`<span class="detail-chip">💬 conversational · 0ms retrieval</span>`);
-  else if (src === 'general_knowledge') chips.push(`<span class="detail-chip warn">🌐 General Knowledge (Model)</span>`);
+  else if (src === 'general_knowledge') {
+    chips.push(`<span class="detail-chip warn">⚠️ Not in dataset · Model Fallback</span>`);
+    if (d.total_ms) chips.push(`<span class="detail-chip warn">✨ LLM: ${ms(d.total_ms)}</span>`);
+  }
   else if (src === 'abstain')       chips.push(`<span class="detail-chip warn">⚠️ not found in corpus</span>`);
   else                              chips.push(`<span class="detail-chip good">🛡️ Grounded &amp; Cited</span>`);
 
@@ -171,9 +174,6 @@ function formatTurnCard(d, tier) {
   const citList = (Array.isArray(d.citations) ? d.citations : []).map(c => typeof c === 'object' ? (c.passage ?? c.id ?? Object.values(c)[0] ?? 1) : c).filter(Boolean);
   if (citList.length) chips.push(`<span class="detail-chip good">cited [${citList.join(', ')}]</span>`);
   
-  if (tier === 'generated' && d.total_ms) {
-    chips.push(`<span class="detail-chip good">✨ LLM: ${ms(d.total_ms)}</span>`);
-  }
   if (d.stt_ms) chips.push(`<span class="detail-chip">🎙️ STT: ${ms(d.stt_ms)}</span>`);
 
   // 200ms Budget mini bar
