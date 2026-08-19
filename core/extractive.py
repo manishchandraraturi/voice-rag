@@ -40,9 +40,10 @@ ALPHA = 0.75
 MAX_SENTENCES = 8
 MAX_SPAN_SENTENCES = 2
 
-# Tuned for ultra-low latency (<25ms fast path)
-MAX_EMBED = 3
-ALWAYS_KEEP_FROM_TOP_HIT = 2
+# Tuned for ultra-low latency (<45ms fast path)
+MAX_EMBED = 2
+ALWAYS_KEEP_FROM_TOP_HIT = 1
+MAX_SENTENCE_CHARS = 96
 
 # Batch size for the sentence-embedding pass, and the two reasons it is not 64.
 #
