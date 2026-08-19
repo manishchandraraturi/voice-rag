@@ -241,6 +241,9 @@ function renderAnswer(d, tier, questionText) {
   turnEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
+/* ───────────────────────── ask ───────────────────────── */
+let busy = false;
+
 async function ask(question) {
   question = (question || '').trim();
   if (!question || busy) return;
