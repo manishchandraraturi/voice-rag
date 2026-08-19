@@ -25,6 +25,26 @@ import pyarrow.parquet as pq
 
 REPO_ID = "ai4bharat/MSMARCO-XI"
 RESOLVE = "https://huggingface.co/datasets/{repo}/resolve/main/{path}"
+
+# All 14 languages available in MSMARCO-XI.
+# Train split has 13 (all except tel); validation split adds tel.
+ALL_LANGS = [
+    "asm",  # Assamese
+    "ben",  # Bengali
+    "guj",  # Gujarati
+    "hin",  # Hindi
+    "kan",  # Kannada
+    "mal",  # Malayalam
+    "mar",  # Marathi
+    "nep",  # Nepali
+    "ori",  # Odia
+    "pan",  # Punjabi
+    "san",  # Sanskrit
+    "tam",  # Tamil
+    "tel",  # Telugu (validation split only)
+    "urd",  # Urdu
+]
+
 COLUMNS = [
     "query_id",
     "query",
@@ -39,8 +59,12 @@ COLUMNS = [
 
 
 def shard_name(lang: str, split: str) -> str:
-    suffix = "train" if split == "train" else "val"
-    return f"{split}/{lang}{suffix}.parquet"
+    # Telugu exists only in the validation split of MSMARCO-XI.
+    actual_split = split
+    if lang == "tel" and split == "train":
+        actual_split = "validation"
+    suffix = "train" if actual_split == "train" else "val"
+    return f"{actual_split}/{lang}{suffix}.parquet"
 
 
 def shard_path(lang: str, split: str, cache_dir: Path) -> str:

@@ -28,13 +28,15 @@ from __future__ import annotations
 
 import re
 
-# Whitespace, Devanagari danda (U+0964) and double danda (U+0965), and ASCII
-# punctuation. Everything not a separator is part of a token.
-_SEPARATORS = re.compile(r"[\s।॥!-/:-@\[-`{-~‐-‧‰-⁞]+")
+# Whitespace, Devanagari danda (U+0964) and double danda (U+0965), Arabic
+# question mark (U+061F), and ASCII punctuation. Script-agnostic: works for
+# Devanagari, Bengali, Gujarati, Gurmukhi, Kannada, Malayalam, Odia, Tamil,
+# Telugu, Arabic/Urdu, and Latin. Everything not a separator is part of a token.
+_SEPARATORS = re.compile(r"[\s।॥؟!-/:-@\[-`{-~‐-‧‰-⁞]+")
 
 # bm25s takes a regex *pattern* rather than a splitter, so this is the inverse:
 # runs of two or more non-separator characters.
-BM25_TOKEN_PATTERN = r"[^\s।॥!-/:-@\[-`{-~‐-‧‰-⁞]{2,}"
+BM25_TOKEN_PATTERN = r"[^\s।॥؟!-/:-@\[-`{-~‐-‧‰-⁞]{2,}"
 
 MIN_TOKEN_LEN = 2
 

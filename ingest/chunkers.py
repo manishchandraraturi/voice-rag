@@ -24,8 +24,24 @@ import numpy as np
 
 Strategy = Literal["fixed", "sentence", "semantic", "metadata"]
 
-# Sentence terminators: danda, double danda, and Latin punctuation.
-_SENT_END = re.compile(r"(?<=[।॥?!])\s+|(?<=[.!?])\s+(?=[A-Zऀ-ॿ])")
+# Sentence terminators: danda, double danda, Arabic question mark, and Latin
+# punctuation followed by an uppercase letter or any Indic script character.
+_SENT_END = re.compile(
+    r"(?<=[।॥?!؟])\s+"                  # Danda / double danda / Arabic question mark
+    r"|(?<=[.!?])\s+(?=["
+    r"A-Z"                               # Latin uppercase
+    r"ऀ-ॿ"                               # Devanagari (Hindi, Marathi, Nepali, Sanskrit)
+    r"ঀ-৿"                               # Bengali / Assamese
+    r"઀-૿"                               # Gujarati
+    r"਀-੿"                               # Gurmukhi (Punjabi)
+    r"଀-୿"                               # Odia
+    r"ಀ-೿"                               # Kannada
+    r"ഀ-ൿ"                               # Malayalam
+    r"஀-௿"                               # Tamil
+    r"ఀ-౿"                               # Telugu
+    r"؀-ۿ"                               # Arabic / Urdu
+    r"])"
+)
 _WS = re.compile(r"\s+")
 
 

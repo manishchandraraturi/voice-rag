@@ -1,7 +1,8 @@
-# bol.sh — Voice RAG for Hindi & Marathi
+# bol.sh — Voice RAG for 14 Indian Languages
 
-**बोल** — *"ask."* Speak a question in Hindi or Marathi; get a grounded, cited answer
-from a 241,572-chunk index in under 200ms.
+**बोल** — *"ask."* Speak a question in Hindi, Marathi, Bengali, Tamil, Telugu, Kannada,
+Malayalam, Gujarati, Punjabi, Odia, Assamese, Urdu, Nepali, Sanskrit or English;
+get a grounded, cited answer from a multilingual index in under 200ms.
 
 Built for **HH Goa 2026 Shortlisting Task 2**.
 
@@ -31,6 +32,30 @@ Reproduce it yourself against the live AWS deployment:
 ```bash
 curl -s "http://65.1.248.78:8000/benchmark?n=50"
 ```
+
+---
+
+## Supported Languages (14 + English)
+
+All languages from the [MSMARCO-XI](https://huggingface.co/datasets/ai4bharat/MSMARCO-XI) dataset:
+
+| Language | Code | Script | STT Support |
+|----------|------|--------|-------------|
+| Hindi | `hin` | Devanagari | Groq Whisper ✅ / Sarvam ✅ |
+| Marathi | `mar` | Devanagari | Groq Whisper ✅ / Sarvam ✅ |
+| Bengali | `ben` | Bengali | Groq Whisper ✅ / Sarvam ✅ |
+| Tamil | `tam` | Tamil | Groq Whisper ✅ / Sarvam ✅ |
+| Telugu | `tel` | Telugu | Groq Whisper ✅ / Sarvam ✅ |
+| Kannada | `kan` | Kannada | Groq Whisper ✅ / Sarvam ✅ |
+| Malayalam | `mal` | Malayalam | Groq Whisper ✅ / Sarvam ✅ |
+| Gujarati | `guj` | Gujarati | Groq Whisper ✅ / Sarvam ✅ |
+| Punjabi | `pan` | Gurmukhi | Groq Whisper ✅ / Sarvam ✅ |
+| Odia | `ori` | Odia | Groq Whisper ✅ / Sarvam ✅ |
+| Assamese | `asm` | Bengali | Groq Whisper ✅ |
+| Urdu | `urd` | Arabic | Groq Whisper ✅ |
+| Nepali | `nep` | Devanagari | Groq Whisper ✅ |
+| Sanskrit | `san` | Devanagari | Groq Whisper ✅ |
+| English | `eng` | Latin | Groq Whisper ✅ / Sarvam ✅ |
 
 ---
 

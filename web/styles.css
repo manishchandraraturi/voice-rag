@@ -22,7 +22,10 @@
   --abstain:   #e0a733;
   --refuse:    #c1443c;
 
-  --sans: "Source Serif 4", Georgia, "Noto Serif Devanagari", serif;
+  --sans: "Source Serif 4", Georgia, "Noto Serif Devanagari",
+          "Noto Serif Bengali", "Noto Serif Tamil", "Noto Serif Telugu",
+          "Noto Serif Kannada", "Noto Serif Malayalam", "Noto Serif Gujarati",
+          "Noto Serif Gurmukhi", "Noto Serif Oriya", "Noto Naskh Arabic", serif;
   --deva: "Noto Serif Devanagari", "Nirmala UI", var(--sans);
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 

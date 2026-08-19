@@ -15,8 +15,8 @@
 
 x-limits: &limits
   cpus: "3.0"        # leave one core for the box's existing services
-  mem_limit: 8g
-  mem_reservation: 2g
+  mem_limit: 12g
+  mem_reservation: 4g
 
 services:
   # One-shot pipeline: stream -> chunk -> embed -> index.
@@ -25,7 +25,10 @@ services:
     build: .
     image: hhgoa-task2:latest
     <<: *limits
-    command: ["python", "-m", "ingest.pipeline", "--langs", "hin", "mar", "--max-queries", "25000", "--stream"]
+    command: ["python", "-m", "ingest.pipeline",
+              "--langs", "asm", "ben", "guj", "hin", "kan", "mal", "mar",
+              "nep", "ori", "pan", "san", "tam", "tel", "urd",
+              "--max-queries", "5000", "--stream"]
     volumes:
       - task2-data:/data
       # Bedrock uses the AWS credential chain; read-only so the container

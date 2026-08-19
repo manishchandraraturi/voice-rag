@@ -163,42 +163,50 @@ def _load_sample_queries(limit: int = 600) -> list[str]:
     import json
 
     out: list[str] = []
-    for lang in ("hin", "mar"):
-        p = DATA_ROOT / "raw" / f"{lang}_train_queries.jsonl"
-        if not p.exists():
-            continue
-        with p.open(encoding="utf-8") as f:
+    # Auto-discover all available language query files
+    raw_dir = DATA_ROOT / "raw"
+    lang_files = sorted(raw_dir.glob("*_train_queries.jsonl")) if raw_dir.is_dir() else []
+    n_langs = max(len(lang_files), 1)
+    per_lang = limit // n_langs
+
+    for qf in lang_files:
+        with qf.open(encoding="utf-8") as f:
             for i, line in enumerate(f):
-                if i >= limit // 2:
+                if i >= per_lang:
                     break
                 out.append(json.loads(line)["query"])
+
     if not out:
         out = [
+            # Hindi
             "भारत की राजधानी क्या है?",
             "ताजमहल किसने बनवाया था?",
             "मैनहट्टन परियोजना का मुख्य उद्देश्य क्या था?",
             "सामाजिक सुरक्षा विकलांगता लाभ के लिए कौन पात्र है?",
             "ग्लोबल वार्मिंग के मुख्य कारण क्या हैं?",
-            "प्रकाश संश्लेषण प्रक्रिया कैसे काम करती है?",
-            "कंप्यूटर में RAM का क्या कार्य है?",
-            "भारतीय संविधान कब लागू हुआ था?",
-            "विटामिन सी के मुख्य स्रोत कौन से हैं?",
-            "सौरमंडल का सबसे बड़ा ग्रह कौन सा है?",
+            # Marathi
             "भारताची राजधानी कोणती आहे?",
             "भारतातील सर्वात मोठे शहर कोणते आहे?",
-            "मराठी भाषेचा इतिहास काय आहे?",
-            "महाराष्ट्राची राजधानी कोणती आहे?",
             "सूर्यमालेतील सर्वात मोठा ग्रह कोणता?",
+            # Bengali
+            "ভারতের রাজধানী কী?",
+            "তাজমহল কে তৈরি করেছিলেন?",
+            # Tamil
+            "இந்தியாவின் தலைநகரம் என்ன?",
+            "தாஜ்மஹால் யார் கட்டினார்?",
+            # Telugu
+            "భారతదేశ రాజధాని ఏమిటి?",
+            "తాజ్ మహల్ ఎవరు నిర్మించారు?",
+            # Gujarati
+            "ભારતની રાજધાની શું છે?",
+            # Kannada
+            "ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?",
+            # English
             "What is the capital of India?",
             "Who built the Taj Mahal?",
-            "What is the purpose of the Manhattan Project?",
             "How does photosynthesis work in plants?",
             "What is the function of RAM in a computer?",
             "What are the main causes of global warming?",
-            "When did the Indian constitution come into effect?",
-            "What is the largest planet in our solar system?",
-            "What are the primary sources of Vitamin C?",
-            "What are the eligibility criteria for disability benefits?",
         ]
     return out
 

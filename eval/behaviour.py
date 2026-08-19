@@ -80,6 +80,20 @@ CASES: list[tuple[str, str, str]] = [
     # ── req 1: input arrives however STT produces it ────────────────────
     ("bharat ki rajdhani kya hai",     "any",       "romanised Hindi — recorded, not asserted"),
     ("लिफ्ट का मतलब है",                 "any",       "code-mixed, as STT often emits"),
+
+    # ── multilingual: greetings in other scripts ─────────────────────────
+    ("নমস্কার",                          "greeting",  "Bengali greeting"),
+    ("வணக்கம்",                          "greeting",  "Tamil greeting"),
+    ("నమస్కారం",                         "greeting",  "Telugu greeting"),
+    ("ನಮಸ್ಕಾರ",                          "greeting",  "Kannada greeting"),
+    ("നമസ്കാരം",                         "greeting",  "Malayalam greeting"),
+
+    # ── multilingual: in-corpus queries (recorded, LLM-dependent) ────────
+    ("ভারতের রাজধানী কী?",              "any",       "Bengali known-good — recorded"),
+    ("இந்தியாவின் தலைநகரம் என்ன?",       "any",       "Tamil known-good — recorded"),
+    ("భారతదేశ రాజధాని ఏమిటి?",          "any",       "Telugu known-good — recorded"),
+    ("ભારતની રાજધાની શું છે?",           "any",       "Gujarati known-good — recorded"),
+    ("ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?",           "any",       "Kannada known-good — recorded"),
 ]
 
 BUDGET_MS = 200

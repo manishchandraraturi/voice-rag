@@ -129,14 +129,38 @@ ABSTAIN_TEXT = (
 )
 
 GREETING_TEXT = (
-    "नमस्ते भाई! मैं आपका Voice RAG AI सहायक हूँ और एकदम बढ़िया हूँ। "
-    "आप मुझसे भारत, इतिहास, विज्ञान, तकनीक, भूगोल या किसी भी सामान्य ज्ञान के विषय पर प्रश्न पूछ सकते हैं!"
+    "नमस्ते! मैं आपका Voice RAG AI सहायक हूँ। "
+    "आप मुझसे हिन्दी, मराठी, বাংলা, தமிழ், తెలుగు, ಕನ್ನಡ, മലയാളം, ગુજરાતી, "
+    "ਪੰਜਾਬੀ, ଓଡ଼ିଆ, অসমীয়া, اردو, नेपाली, संस्कृतम् और English "
+    "में प्रश्न पूछ सकते हैं!"
 )
 
-# Greetings, casual openers, and conversational questions
+# Greetings, casual openers, and conversational questions — all 14 languages.
 _GREETING_WORDS = (
-    r"(?:hi+|hey+|hello+|yo|hola|namaste|namaskar|नमस्ते|नमस्कार|हॅलो|हैलो|हेलो|"
-    r"good\s+(?:morning|afternoon|evening)|pranam|प्रणाम|ram\s+ram|राम\s+राम|jai\s+shree\s+ram|जय\s+श्री\s+राम)"
+    r"(?:hi+|hey+|hello+|yo|hola|namaste|namaskar|"
+    # Devanagari (Hindi, Marathi, Nepali, Sanskrit)
+    r"नमस्ते|नमस्कार|हॅलो|हैलो|हेलो|"
+    # Bengali / Assamese
+    r"নমস্কার|নমস্তে|হ্যালো|"
+    # Gujarati
+    r"નમસ્તે|નમસ્કાર|"
+    # Gurmukhi (Punjabi)
+    r"ਸਤ\s+ਸ੍ਰੀ\s+ਅਕਾਲ|ਨਮਸਤੇ|"
+    # Kannada
+    r"ನಮಸ್ಕಾರ|"
+    # Malayalam
+    r"നമസ്കാരം|"
+    # Odia
+    r"ନମସ୍କାର|"
+    # Tamil
+    r"வணக்கம்|"
+    # Telugu
+    r"నమస్కారం|"
+    # Urdu (Arabic script)
+    r"آداب|السلام\s+علیکم|"
+    # Romanised common
+    r"good\s+(?:morning|afternoon|evening)|pranam|प्रणाम|"
+    r"ram\s+ram|राम\s+राम|jai\s+shree\s+ram|जय\s+श्री\s+राम)"
 )
 _CONV_PHRASES = (
     r"(?:how\s+are\s+you|what'?s\s+up|kaise?\s+(?:ho|hai|hain)|कैसे\s+(?:हो|है|हैं)|कैसा\s+है|"
@@ -144,10 +168,22 @@ _CONV_PHRASES = (
     r"tum\s+kaun\s+ho|aap\s+kaun\s+hai|तुम\s+कौन\s+हो|आप\s+कौन\s+हैं|तू\s+कौन\s+है|"
     r"who\s+are\s+you|what\s+is\s+your\s+name|what\s+can\s+you\s+do|"
     r"kya\s+haal\s+hai|क्या\s+हाल\s+है|kya\s+chal\s+raha\s+hai|क्या\s+चल\s+रहा\s+है|"
-    r"test|testing|thanks?|thank\s+you|dhanyavaad|धन्यवाद|ok|okay|bye)"
+    # Bengali
+    r"কেমন\s+আছ|কেমন\s+আছেন|"
+    # Tamil
+    r"எப்படி\s+இருக்கீங்க|"
+    # Telugu
+    r"ఎలా\s+ఉన్నారు|"
+    # Urdu
+    r"کیسے\s+ہو|"
+    r"test|testing|thanks?|thank\s+you|dhanyavaad|धन्यवाद|"
+    r"ধন্যবাদ|நன்றி|ధన్యవాదాలు|ಧನ್ಯವಾದ|നന്ദി|ગુજરાતી|شکریہ|"
+    r"ok|okay|bye)"
 )
 _GREETING = re.compile(
-    rf"^\W*(?:{_GREETING_WORDS}\s*)?(?:{_CONV_PHRASES}|\b{_GREETING_WORDS}\b)[\s!.?,]*$",
+    # \b fails for Indic scripts (matras are not \w), so anchor with ^ and $
+    # and use \W* / \s* instead of word boundaries.
+    rf"^\W*(?:{_GREETING_WORDS}\s*)?(?:{_CONV_PHRASES}|{_GREETING_WORDS})[\s!.?,؟]*$",
     re.I,
 )
 

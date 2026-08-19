@@ -51,24 +51,46 @@ def pct(values: list[float]) -> dict[str, float]:
 
 def run(tag: str, ensemble: list[str], n_per_lang: int = 100, warmup_per_lang: int = 10, top_k: int = 10) -> dict:
     rng = np.random.default_rng(42)
-    hin_raw = read_jsonl(DATA_ROOT / "raw" / "hin_train_queries.jsonl")
-    mar_raw = read_jsonl(DATA_ROOT / "raw" / "mar_train_queries.jsonl")
+
+    # Auto-discover all available language query files
+    raw_dir = DATA_ROOT / "raw"
+    lang_files = sorted(raw_dir.glob("*_train_queries.jsonl")) if raw_dir.is_dir() else []
+    lang_data: dict[str, list[dict]] = {}
+    for qf in lang_files:
+        lang_code = qf.stem.split("_")[0]
+        lang_data[lang_code] = read_jsonl(qf)
+
+    # Fallback to hin/mar if nothing found
+    if not lang_data:
+        hin = read_jsonl(raw_dir / "hin_train_queries.jsonl")
+        mar = read_jsonl(raw_dir / "mar_train_queries.jsonl")
+        if hin: lang_data["hin"] = hin
+        if mar: lang_data["mar"] = mar
 
     total_need = n_per_lang + warmup_per_lang
-    hin_idx = rng.choice(len(hin_raw), total_need, replace=False)
-    mar_idx = rng.choice(len(mar_raw), total_need, replace=False)
+    warmup_queries: list[str] = []
+    test_queries: list[tuple[str, str]] = []
 
-    # 30 Warmup queries (10 per language)
-    hin_warmup = [hin_raw[i]["query"] for i in hin_idx[:warmup_per_lang]]
-    mar_warmup = [mar_raw[i]["query"] for i in mar_idx[:warmup_per_lang]]
-    eng_warmup = [hin_raw[i]["query_eng"] for i in hin_idx[:warmup_per_lang]]
-    warmup_queries = hin_warmup + mar_warmup + eng_warmup
+    # Sample from each language
+    for lang_code, rows in lang_data.items():
+        if not rows:
+            continue
+        n_avail = len(rows)
+        need = min(total_need, n_avail)
+        idx = rng.choice(n_avail, need, replace=False)
+        w_count = min(warmup_per_lang, need)
+        t_count = need - w_count
+        warmup_queries += [rows[i]["query"] for i in idx[:w_count]]
+        test_queries += [(rows[i]["query"], lang_code) for i in idx[w_count:]]
 
-    # 300 Measured queries (100 per language)
-    hin_test = [hin_raw[i]["query"] for i in hin_idx[warmup_per_lang:]]
-    mar_test = [mar_raw[i]["query"] for i in mar_idx[warmup_per_lang:]]
-    eng_test = [hin_raw[i]["query_eng"] for i in hin_idx[warmup_per_lang:]]
-    test_queries = [(q, "Hindi") for q in hin_test] + [(q, "Marathi") for q in mar_test] + [(q, "English") for q in eng_test]
+    # Add English queries from first available language's query_eng
+    first_lang = next(iter(lang_data.values()), [])
+    if first_lang:
+        eng_need = min(total_need, len(first_lang))
+        eng_idx = rng.choice(len(first_lang), eng_need, replace=False)
+        w_eng = min(warmup_per_lang, eng_need)
+        warmup_queries += [first_lang[i]["query_eng"] for i in eng_idx[:w_eng]]
+        test_queries += [(first_lang[i]["query_eng"], "English") for i in eng_idx[w_eng:]]
 
     # Deterministic shuffle across languages
     rng_test = np.random.default_rng(42)

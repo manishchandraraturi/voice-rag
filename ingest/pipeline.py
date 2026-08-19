@@ -303,7 +303,8 @@ def stage_index(chunk_paths: dict[str, Path], tag: str, force: bool) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--langs", nargs="+", default=["hin", "mar"])
+    ap.add_argument("--langs", nargs="+", default=["hin", "mar"],
+                    help="language codes (default: hin mar; use 'all' for all 14)")
     ap.add_argument("--split", default="train", choices=["train", "validation"])
     ap.add_argument("--max-queries", type=int, default=50_000)
     ap.add_argument("--tag", default="full", help="namespaces outputs, e.g. 'pilot'")
@@ -317,6 +318,11 @@ def main() -> None:
     )
     ap.add_argument("--threads", type=int, default=int(os.getenv("ORT_THREADS", "0")))
     args = ap.parse_args()
+
+    # --langs all expands to all 14 MSMARCO-XI languages
+    from ingest.download import ALL_LANGS
+    if args.langs == ["all"]:
+        args.langs = list(ALL_LANGS)
 
     print(f"data root : {DATA_ROOT}")
     print(f"tag       : {args.tag}")
