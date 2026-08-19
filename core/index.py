@@ -203,7 +203,7 @@ class ChunkIndex:
         ix.hnsw = hnswlib.Index(space="ip", dim=DIM)
         ix.hnsw.load_index(str(d / "hnsw.bin"), max_elements=len(ix.chunk_ids))
         ix.hnsw.set_ef(ef_search)
-        ix.bm25 = bm25s.BM25.load(str(d / "bm25"))
+        ix.bm25 = bm25s.BM25.load(str(d / "bm25"), mmap=True, load_corpus=False)
         return ix
 
     def __len__(self) -> int:
