@@ -261,11 +261,18 @@ async function ask(question) {
     fast._turnId = turnId;
 
     const willGenerate = !['refusal', 'greeting'].includes(fast.answer_source);
-    renderAnswer(fast, willGenerate ? 'pending' : 'idle', question);
-    $('#hint').textContent = `answered in ${ms(fast.fast_path_ms)} — fast path completed`;
+    const isAbstain = fast.answer_source === 'abstain';
+
+    // Only show Tier 1 immediately if it has a real answer (not abstain)
+    if (!isAbstain) {
+      renderAnswer(fast, willGenerate ? 'pending' : 'idle', question);
+      $('#hint').textContent = `answered in ${ms(fast.fast_path_ms)} — fast path completed`;
+    } else {
+      $('#hint').textContent = `searching deeper… (fast path ${ms(fast.fast_path_ms)})`;
+    }
     pulse(0.5);
 
-    // Tier 2 — LLM Polish
+    // Tier 2 — LLM Polish / General Knowledge
     if (willGenerate) {
       try {
         const full = await api('/ask', {
@@ -273,14 +280,15 @@ async function ask(question) {
           body: JSON.stringify({ question, generate: true }),
         });
         full._turnId = turnId;
-        renderAnswer(full, full.answer_source === 'generated' ? 'generated' : 'idle', question);
+        renderAnswer(full, (full.answer_source === 'generated' || full.answer_source === 'general_knowledge') ? 'generated' : 'idle', question);
         $('#hint').textContent =
           full.answer_source === 'generated'
             ? `polished in ${ms(full.total_ms)} · fast answer stood at ${ms(full.fast_path_ms)}`
-            : full.unsourced_answer
-              ? `corpus could not answer — showing model's own knowledge, unverified`
-              : `kept extracted answer in ${ms(full.fast_path_ms)}`;
+            : full.answer_source === 'general_knowledge'
+              ? `answered from model knowledge in ${ms(full.total_ms)}`
+              : `answered in ${ms(full.fast_path_ms)}`;
       } catch {
+        if (isAbstain) renderAnswer(fast, 'idle', question);
         $('#hint').textContent = 'generation unavailable — extracted answer stands';
       }
     }
