@@ -1,8 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
    बोल — client
    Three jobs: drive the dot-matrix field, talk to the API, and make
-   the two-tier answer legible (fast grounded answer first, LLM polish
-   second — the second can only replace the first, never remove it).
+   the two-tier answer legible.
    ═══════════════════════════════════════════════════════════════ */
 
 const $  = (s) => document.querySelector(s);
@@ -17,108 +16,7 @@ const api = async (path, opts) => {
   return r.json();
 };
 
-/* ───────────────────────── dot-matrix field ─────────────────────────
-   A grid of dots displaced by two travelling sine waves. `energy` is
-   driven by live microphone amplitude while recording and by a decaying
-   pulse while a query is in flight, so the background is a readout of
-   system state rather than ambience.                                  */
-(() => {
-  const cv = document.getElementById('field');
-  if (!cv || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const ctx = cv.getContext('2d', { alpha: true });
-
-  let w = 0, h = 0, dpr = 1, cols = 0, rows = 0, GAP = 30;
-
-  function size() {
-    // DPR capped at 1.5: the field is soft by design, so the extra pixels cost
-    // fill rate without being visible.
-    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-    w = cv.clientWidth; h = cv.clientHeight;
-    cv.width = w * dpr; cv.height = h * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    // Hold the dot count near a budget rather than a fixed pitch, so a large
-    // display doesn't quadratically increase per-frame work.
-    GAP = Math.max(26, Math.sqrt((w * h) / 2600));
-    cols = Math.ceil(w / GAP) + 1;
-    rows = Math.ceil(h / GAP) + 1;
-  }
-  size();
-  addEventListener('resize', size, { passive: true });
-
-  const state = { energy: 0, target: 0, t: 0 };
-  window.__field = state;
-
-  // Pointer adds a soft local swell — rewards cursor movement without noise.
-  let px = -999, py = -999;
-  addEventListener('pointermove', (e) => { px = e.clientX; py = e.clientY; }, { passive: true });
-  addEventListener('pointerleave', () => { px = py = -999; });
-
-  // Square dots, drawn in alpha buckets. Setting fillStyle is the expensive
-  // call, so instead of ~3,000 state changes per frame we make eight: every dot
-  // is binned by opacity and each bin is filled in one pass. Squares also read
-  // more like an LED matrix than circles, and fillRect is far cheaper than arc.
-  const BINS = 8;
-  const bins = Array.from({ length: BINS }, () => []);
-  let last = 0;
-
-  function frame(now) {
-    requestAnimationFrame(frame);
-    if (now - last < 32) return;            // ~30fps is plenty for this motion
-    last = now;
-
-    state.t += 0.02;
-    state.energy += (state.target - state.energy) * 0.06;
-    state.target *= 0.985;                   // decay toward calm
-
-    ctx.clearRect(0, 0, w, h);
-    const E = state.energy;
-    const hot = E > 0.1;
-    for (let b = 0; b < BINS; b++) bins[b].length = 0;
-
-    for (let i = 0; i < cols; i++) {
-      const wi = i * 0.22, si = Math.sin(wi + state.t * 2.1);
-      const x = i * GAP;
-      for (let j = 0; j < rows; j++) {
-        const y = j * GAP;
-        const wave = si * Math.cos(j * 0.19 - state.t * 1.5)
-                   + Math.sin((i + j) * 0.11 + state.t * 1.2);
-
-        // vertical falloff keeps the field quiet behind the headline
-        const fall = y / h * 1.5 + 0.18;
-
-        const dx = px - x, dy = py - y;
-        const d2 = dx * dx + dy * dy;
-        const near = d2 < 36100 ? 1 - Math.sqrt(d2) / 190 : 0;
-
-        const a = (0.05 + wave * 0.05 + E * 0.2) * (fall > 1 ? 1 : fall) + near * 0.34;
-        if (a <= 0.02) continue;
-
-        const s = Math.min(2.6, (1.1 + wave * 0.8) * (0.5 + E * 1.4) + near * 2.4);
-        if (s <= 0.35) continue;
-
-        const b = Math.min(BINS - 1, (a * BINS / 0.5) | 0);
-        bins[b].push(x, y + wave * 9 * E, s);
-      }
-    }
-
-    for (let b = 0; b < BINS; b++) {
-      const arr = bins[b];
-      if (!arr.length) continue;
-      const a = ((b + 0.5) / BINS) * 0.5;
-      ctx.fillStyle = hot
-        ? `rgba(255,${(107 + 110 * (1 - Math.min(1, E))) | 0},${(53 + 160 * (1 - Math.min(1, E))) | 0},${a})`
-        : `rgba(255,255,255,${a})`;
-      for (let k = 0; k < arr.length; k += 3) {
-        const s = arr[k + 2];
-        ctx.fillRect(arr[k], arr[k + 1], s, s);
-      }
-    }
-  }
-  requestAnimationFrame(frame);
-})();
-
-const pulse = (v) => { if (window.__field) window.__field.target = Math.max(window.__field.target, v); };
+const pulse = (v) => {};
 
 /* ───────────────────────── health ───────────────────────── */
 let SERVING = [];
@@ -176,20 +74,8 @@ function formatTurnCard(d, tier) {
   
   if (d.stt_ms) chips.push(`<span class="detail-chip">🎙️ STT: ${ms(d.stt_ms)}</span>`);
 
-  // 200ms Budget mini bar
-  const fastMs = d.fast_path_ms || 0;
-  const pct = Math.min(100, (fastMs / 200) * 100);
-  const isOver = fastMs > 200;
-  const budgetBarHtml = `
-    <div class="budget-mini">
-      <div class="budget-mini-bar">
-        <div class="budget-mini-fill ${isOver ? 'over' : ''}" style="width: ${pct}%"></div>
-      </div>
-      <div class="budget-mini-legend">
-        <span>${ms(fastMs)} fast path (${(100 - pct).toFixed(0)}% budget unused)</span>
-        <span>200ms budget</span>
-      </div>
-    </div>`;
+  // 200ms Budget mini bar removed for clean UI
+  const budgetBarHtml = '';
 
   // Collapsible sources (if any retrieved)
   const sourcesHtml = d.sources?.length

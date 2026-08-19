@@ -254,10 +254,15 @@ class RAGHarness:
         retrieval = retriever.search(qvec, question, k=self.top_k)
         t3 = mark("retrieve", t2)
         r.retrieval_provenance = retrieval.provenance()
-        r.sources = [
-            Source(h.unit_id, h.text, round(h.score, 5), h.contributors)
-            for h in retrieval.hits[: self.context_passages]
-        ]
+        sources_list = []
+        for h in retrieval.hits[: self.context_passages]:
+            clean_text = h.text
+            if clean_text.strip().startswith("[") and " | " in clean_text:
+                parts = clean_text.split(" | ", 1)
+                if len(parts) == 2 and len(parts[0]) < 120:
+                    clean_text = parts[1].strip()
+            sources_list.append(Source(h.unit_id, clean_text, round(h.score, 5), h.contributors))
+        r.sources = sources_list
 
         extracted: ExtractiveAnswer = extract_answer(question, qvec, retrieval.hits, self.embedder)
         t4 = mark("extract", t3)

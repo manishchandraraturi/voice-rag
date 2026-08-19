@@ -172,6 +172,13 @@ def extract_answer(
     for h in list(hits)[:top_hits]:
         for i, s in enumerate(split_sentences(h.text)):
             key = s.strip()
+            
+            # Strip metadata prefixes like "[description] explanation description definition | "
+            if key.startswith("[") and " | " in key:
+                parts = key.split(" | ", 1)
+                if len(parts) == 2 and len(parts[0]) < 120:
+                    key = parts[1].strip()
+
             if len(key) < 3 or key in seen:
                 continue
             seen.add(key)

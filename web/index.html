@@ -7,16 +7,17 @@
 <meta name="description" content="Speak a question in Hindi, English, Bengali, or Marathi. Get a grounded, cited answer in under 200ms.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Noto+Serif+Devanagari:wght@400;600;700&family=Noto+Serif+Bengali:wght@400;600&family=Noto+Serif+Tamil:wght@400;600&family=Noto+Serif+Telugu:wght@400;600&family=Noto+Serif+Kannada:wght@400;600&family=Noto+Serif+Malayalam:wght@400;600&family=Noto+Serif+Gujarati:wght@400;600&family=Noto+Serif+Gurmukhi:wght@400;600&family=Noto+Serif+Oriya:wght@400;600&family=Noto+Naskh+Arabic:wght@400;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=18.0">
+<link rel="stylesheet" href="/styles.css?v=29.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>">
 </head>
 <body>
 
 <!-- ─── Voice Recording Modal Overlay (Top-Level Fixed Center Viewport) ─── -->
-<div class="voice-modal" id="voiceModal" style="display: none; pointer-events: none;">
+<div class="voice-modal" id="voiceModal">
   <div class="voice-card">
-    <button class="voice-modal-close" id="closeVoiceModal" type="button" onclick="closeVoiceModal()" aria-label="Close">✕</button>
+    <button class="voice-modal-close" id="closeVoiceModal" type="button" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
     <div class="voice-mic-wrap">
       <button class="voice-mic-btn" id="voiceModalBtn" type="button" onclick="stopVoiceRecording()" aria-label="Stop recording">
         <svg viewBox="0 0 24 24" class="voice-modal-icon">
@@ -36,8 +37,10 @@
   </div>
 </div>
 
-<!-- Signature motion: dot-matrix field, reacts to live mic amplitude -->
-<canvas id="field" aria-hidden="true"></canvas>
+<!-- Signature motion: organic AI glow mesh -->
+<div class="ai-glow g1" aria-hidden="true"></div>
+<div class="ai-glow g2" aria-hidden="true"></div>
+<div class="ai-glow g3" aria-hidden="true"></div>
 <div class="vignette" aria-hidden="true"></div>
 
 <header class="topbar">
