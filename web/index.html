@@ -72,6 +72,28 @@
       <div class="hint" id="hint">Press the mic and speak, or type and hit enter.</div>
     </div>
 
+    <!-- ─── Voice Recording Modal Overlay (Center Focused with Waveform) ─── -->
+    <div class="voice-modal" id="voiceModal" aria-hidden="true" hidden>
+      <div class="voice-card">
+        <div class="voice-mic-wrap">
+          <button class="voice-mic-btn" id="voiceModalBtn" aria-label="Stop recording">
+            <svg viewBox="0 0 24 24" class="voice-modal-icon">
+              <path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-5a3.5 3.5 0 1 0-7 0v5A3.5 3.5 0 0 0 12 15Z"/>
+              <path d="M5 11.5a7 7 0 0 0 14 0M12 18.5V22"/>
+            </svg>
+            <span class="voice-ring r1"></span>
+            <span class="voice-ring r2"></span>
+            <span class="voice-ring r3"></span>
+          </button>
+        </div>
+        <div class="voice-status" id="voiceStatus">Listening… speak now</div>
+        <div class="voice-wave-container">
+          <canvas id="voiceWave" width="360" height="52"></canvas>
+        </div>
+        <div class="voice-subtext">Tap mic again to finish &amp; answer</div>
+      </div>
+    </div>
+
     <div class="samples anim" style="--d:.42s">
       <button class="sample" data-q="भारत की राजधानी क्या है?">भारत की राजधानी? (हिन्दी)</button>
       <button class="sample" data-q="ভারতের রাজধানী কী?">ভারতের রাজধানী? (বাংলা)</button>
@@ -82,36 +104,13 @@
     </div>
   </div>
 
-  <!-- ─── answer surface ─── -->
-  <div class="answer-shell" id="answerShell" hidden>
-    <div class="answer-head">
-      <div class="tier-track" id="tierTrack">
-        <span class="tier t1" data-state="idle">
-          <b>01</b> extracted <em id="t1ms">—</em>
-        </span>
-        <span class="tier-link" aria-hidden="true"></span>
-        <span class="tier t2" data-state="idle">
-          <b>02</b> generated <em id="t2ms">—</em>
-        </span>
-      </div>
-      <button class="close" id="closeAns" aria-label="Dismiss">✕</button>
+  <!-- ─── Session Conversation Feed ─── -->
+  <div class="convo-feed" id="conversationFeed" hidden>
+    <div class="convo-head">
+      <span class="convo-title">Session Conversation</span>
+      <button class="convo-clear-btn" id="clearConvoBtn" aria-label="Clear session">Clear Chat ✕</button>
     </div>
-
-    <p class="answer" id="answer" lang="hi"></p>
-
-    <!-- the 200ms budget, made literal -->
-    <div class="budget" id="budget">
-      <div class="budget-bar"><i id="budgetFill"></i><span class="budget-cap"></span></div>
-      <div class="budget-legend">
-        <span id="budgetLabel">—</span>
-        <span class="dimmer">200ms budget</span>
-      </div>
-    </div>
-
-    <div id="unsourced"></div>
-    <div class="verdicts" id="verdicts"></div>
-    <div class="sources" id="beforeAfter"></div>
-    <div class="sources" id="sources"></div>
+    <div class="convo-items" id="convoItems"></div>
   </div>
 
   <!-- ─── live telemetry strip ─── -->

@@ -137,111 +137,107 @@ api('/health').then((h) => {
   $('#chipIndex').querySelector('span').textContent = 'server unreachable';
 });
 
-/* ───────────────────────── answer rendering ───────────────────────── */
-const shell = $('#answerShell');
+/* ───────────────────────── Session Conversation Feed ───────────────────────── */
+const convoFeed = $('#conversationFeed');
+const convoItems = $('#convoItems');
+let sessionTurns = [];
 
-function setTier(el, state, value) {
-  el.dataset.state = state;
-  if (value !== undefined) el.querySelector('em').textContent = value;
+function clearSessionConvo() {
+  sessionTurns = [];
+  if (convoItems) convoItems.innerHTML = '';
+  if (convoFeed) convoFeed.hidden = true;
+  document.body.classList.remove('answered');
 }
 
-function renderBudget(msValue) {
-  const pctRaw = (msValue / 200) * 100;
-  const fill = $('#budgetFill');
-  fill.style.width = `${Math.min(100, pctRaw)}%`;
-  fill.classList.toggle('over', msValue > 200);
-  $('#budgetLabel').innerHTML = msValue > 200
-    ? `<span style="color:var(--refuse)">${ms(msValue)} — over budget</span>`
-    : `${ms(msValue)} · ${(100 - pctRaw).toFixed(0)}% of budget unused`;
-}
+const clearBtn = $('#clearConvoBtn');
+if (clearBtn) clearBtn.onclick = clearSessionConvo;
 
-function renderAnswer(d, tier) {
-  shell.hidden = false;
-  document.body.classList.add('answered');   // hero compacts, answer takes the stage
-
-  const ans = $('#answer');
-  ans.textContent = d.answer || '(no answer)';
-  ans.classList.toggle('muted', ['abstain', 'refusal', 'greeting'].includes(d.answer_source));
-
-  // tier track
-  const t1 = document.querySelector('.tier.t1');
-  const t2 = document.querySelector('.tier.t2');
-  setTier(t1, 'active', ms(d.fast_path_ms));
-  // "generated" alone is ambiguous when the model returns the extracted span
-  // verbatim -- which it does whenever that span is already a complete answer.
-  // Distinguishing rewritten from unchanged shows the LLM had an effect (or
-  // honestly reports that it had none) instead of leaving the viewer guessing.
+function formatTurnCard(d, tier) {
   const rewritten = !!d.generated_answer && d.generated_answer !== d.extractive_answer;
-  if (tier === 'generated') {
-    setTier(t2, 'active', `${ms(d.total_ms)} · ${rewritten ? 'rewritten' : 'unchanged'}`);
-  } else if (tier === 'pending') {
-    setTier(t2, 'pending', '···');
-  } else if (d.reason === 'llm_reported_insufficient') {
-    // The LLM ran and judged the context inadequate. Saying "declined" rather
-    // than showing a blank makes it clear generation happened and had an
-    // opinion -- which is the point of running it at all.
-    setTier(t2, 'declined', 'declined');
-  } else if (d.llm_error) {
-    setTier(t2, 'declined', 'failed');
-  } else {
-    setTier(t2, 'idle', '—');
-  }
+  const isMuted = ['abstain', 'refusal', 'greeting'].includes(d.answer_source);
 
-  renderBudget(d.fast_path_ms);
-
-  // verdicts — the guardrail decisions, stated plainly
-  const v = [];
+  // Small detail chips
+  const chips = [];
   const src = d.answer_source;
-  if (src === 'refusal')       v.push(`<span class="v bad">refused · ${esc(d.reason || 'unsafe intent')}</span>`);
-  else if (src === 'greeting') v.push(`<span class="v">not a question · no retrieval spent</span>`);
-  else if (src === 'abstain')  v.push(`<span class="v warn">abstained · ${esc(d.reason === 'llm_reported_insufficient' ? 'model judged context inadequate' : 'not supported by corpus')}</span>`);
-  else                         v.push(`<span class="v good">grounded</span>`);
-  if (d.support   != null) v.push(`<span class="v">support ${d.support.toFixed(3)}</span>`);
-  if (d.grounding != null) v.push(`<span class="v">grounding ${d.grounding.toFixed(3)}</span>`);
-  if (d.citations?.length) v.push(`<span class="v good">cited [${d.citations.join(', ')}]</span>`);
-  if (src === 'generated') {
-    v.push(rewritten
-      ? `<span class="v good">LLM rewrote the span</span>`
-      : `<span class="v">LLM returned the span verbatim — nothing to improve</span>`);
-  }
-  if (d.stt_ms)   v.push(`<span class="v">STT ${ms(d.stt_ms)} · outside budget</span>`);
-  if (d.llm_error) v.push(`<span class="v bad">LLM ${esc(d.llm_error.slice(0, 48))}</span>`);
-  $('#verdicts').innerHTML = v.join('');
+  if (src === 'refusal')            chips.push(`<span class="detail-chip bad">⛔ refused · ${esc(d.reason || 'unsafe intent')}</span>`);
+  else if (src === 'greeting')      chips.push(`<span class="detail-chip">💬 conversational · 0ms retrieval</span>`);
+  else if (src === 'general_knowledge') chips.push(`<span class="detail-chip warn">🌐 General Knowledge (Model)</span>`);
+  else if (src === 'abstain')       chips.push(`<span class="detail-chip warn">⚠️ not found in corpus</span>`);
+  else                              chips.push(`<span class="detail-chip good">🛡️ Grounded &amp; Cited</span>`);
 
-  // Model-knowledge answer, only ever alongside an abstain and never merged
-  // into the answer above it.
-  const un = $('#unsourced');
-  if (un) {
-    un.innerHTML = d.unsourced_answer
-      ? `<div class="unsourced">
-           <div class="tag-un">⚠ not from the corpus · model's own knowledge</div>
-           <p lang="hi">${esc(d.unsourced_answer)}</p>
-           <div class="caveat">unverified — no source, no citation, not covered by the grounding check</div>
-         </div>`
-      : '';
+  if (d.fast_path_ms != null) chips.push(`<span class="detail-chip">⚡ latency: ${ms(d.fast_path_ms)}</span>`);
+  if (d.support   != null && src !== 'general_knowledge') chips.push(`<span class="detail-chip">support: ${d.support.toFixed(2)}</span>`);
+  if (d.grounding != null && src !== 'general_knowledge') chips.push(`<span class="detail-chip">grounding: ${d.grounding.toFixed(2)}</span>`);
+  if (d.citations?.length) chips.push(`<span class="detail-chip good">cited [${d.citations.join(', ')}]</span>`);
+  
+  if (tier === 'generated' && d.total_ms) {
+    chips.push(`<span class="detail-chip good">✨ LLM: ${ms(d.total_ms)}</span>`);
   }
+  if (d.stt_ms) chips.push(`<span class="detail-chip">🎙️ STT: ${ms(d.stt_ms)}</span>`);
 
-  const before = $('#beforeAfter');
-  if (before) {
-    before.innerHTML = rewritten
-      ? `<details><summary>what the LLM changed ↘</summary>
-           <div class="src"><b>01 extracted</b><br>${esc(d.extractive_answer)}</div>
-           <div class="src" style="border-color:var(--grounded)"><b>02 generated</b><br>${esc(d.generated_answer)}</div>
-         </details>`
-      : '';
-  }
+  // 200ms Budget mini bar
+  const fastMs = d.fast_path_ms || 0;
+  const pct = Math.min(100, (fastMs / 200) * 100);
+  const isOver = fastMs > 200;
+  const budgetBarHtml = `
+    <div class="budget-mini">
+      <div class="budget-mini-bar">
+        <div class="budget-mini-fill ${isOver ? 'over' : ''}" style="width: ${pct}%"></div>
+      </div>
+      <div class="budget-mini-legend">
+        <span>${ms(fastMs)} fast path (${(100 - pct).toFixed(0)}% budget unused)</span>
+        <span>200ms budget</span>
+      </div>
+    </div>`;
 
-  $('#sources').innerHTML = d.sources?.length
-    ? `<details><summary>${d.sources.length} retrieved passages ↘</summary>` +
+  // Collapsible sources (if any retrieved)
+  const sourcesHtml = d.sources?.length
+    ? `<details style="margin-top:8px; font-size:11px;"><summary style="cursor:pointer; color:var(--fg-dim); font-family:var(--mono);">Retrieved context (${d.sources.length} passages) ↘</summary>` +
       d.sources.map((s, i) => `
-        <div class="src">[${i + 1}] ${esc(s.text.slice(0, 320))}
-          <div class="meta">${esc(s.unit_id)} · rrf ${s.score}${
-            Object.keys(s.contributors || {}).length ? ' · via ' + esc(Object.keys(s.contributors).join(', ')) : ''
-          }</div>
+        <div class="src" style="margin:8px 0; font-size:12px;">[${i + 1}] ${esc(s.text.slice(0, 240))}…
+          <div class="meta" style="font-size:9.5px;">${esc(s.unit_id)} · rrf ${s.score}</div>
         </div>`).join('') + `</details>`
     : '';
 
-  shell.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  return `
+    <div class="main-answer ${isMuted ? 'muted' : ''}" lang="hi">${esc(d.answer || '(no answer)')}</div>
+    ${budgetBarHtml}
+    <div class="meta-details-row">
+      ${chips.join('')}
+    </div>
+    ${sourcesHtml}
+  `;
+}
+
+function renderAnswer(d, tier, questionText) {
+  if (convoFeed) convoFeed.hidden = false;
+  document.body.classList.add('answered');
+
+  const currentTurnId = d._turnId || ('turn_' + Date.now());
+  d._turnId = currentTurnId;
+
+  let turnEl = document.getElementById(currentTurnId);
+  if (!turnEl) {
+    turnEl = document.createElement('div');
+    turnEl.className = 'convo-turn';
+    turnEl.id = currentTurnId;
+    turnEl.innerHTML = `
+      <div class="user-query-wrap">
+        <div class="user-query-text">${esc(questionText || $('#q').value || '')}</div>
+      </div>
+      <div class="assistant-card" id="card_${currentTurnId}">
+        ${formatTurnCard(d, tier)}
+      </div>
+    `;
+    convoItems.appendChild(turnEl);
+  } else {
+    const cardEl = document.getElementById(`card_${currentTurnId}`);
+    if (cardEl) {
+      cardEl.innerHTML = formatTurnCard(d, tier);
+    }
+  }
+
+  turnEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 /* ───────────────────────── ask ───────────────────────── */
@@ -255,42 +251,38 @@ async function ask(question) {
   $('#hint').classList.remove('err');
   $('#hint').textContent = 'retrieving…';
 
+  const turnId = 'turn_' + Date.now();
+
   try {
-    // Tier 1 — extractive. This is the number the 200ms budget is measured against.
+    // Tier 1 — Extractive Fast Path
     const fast = await api('/ask', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, generate: false }),
     });
-    // Generation is worth running on an abstain too -- it can rescue a borderline
-    // query, and it produces the clearly-labelled unsourced answer. Only a refusal
-    // or a greeting ends the exchange here.
+    fast._turnId = turnId;
+
     const willGenerate = !['refusal', 'greeting'].includes(fast.answer_source);
-    renderAnswer(fast, willGenerate ? 'pending' : 'idle');
-    $('#hint').textContent = `answered in ${ms(fast.fast_path_ms)} — no LLM involved`;
+    renderAnswer(fast, willGenerate ? 'pending' : 'idle', question);
+    $('#hint').textContent = `answered in ${ms(fast.fast_path_ms)} — fast path completed`;
     pulse(0.5);
 
-    // Tier 2 — LLM polish. Can only replace the answer, never remove it.
-    //
-    // This used to be gated on `decision === 'allow'`, which meant an abstain
-    // never made the call at all: the page showed "no LLM involved" while the
-    // API would happily have returned both a rescue attempt and the unsourced
-    // answer. The gate belongs on refusals and greetings, not on abstains.
+    // Tier 2 — LLM Polish
     if (willGenerate) {
       try {
         const full = await api('/ask', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ question, generate: true }),
         });
-        renderAnswer(full, full.answer_source === 'generated' ? 'generated' : 'idle');
+        full._turnId = turnId;
+        renderAnswer(full, full.answer_source === 'generated' ? 'generated' : 'idle', question);
         $('#hint').textContent =
           full.answer_source === 'generated'
             ? `polished in ${ms(full.total_ms)} · fast answer stood at ${ms(full.fast_path_ms)}`
             : full.unsourced_answer
-              ? `corpus could not answer — showing the model's own knowledge, unverified`
-              : `kept the extracted answer — ${esc(full.reason || 'generation not used')}`;
+              ? `corpus could not answer — showing model's own knowledge, unverified`
+              : `kept extracted answer in ${ms(full.fast_path_ms)}`;
       } catch {
-        setTier(document.querySelector('.tier.t2'), 'idle', '—');
-        $('#hint').textContent = 'generation unavailable — the grounded answer stands';
+        $('#hint').textContent = 'generation unavailable — extracted answer stands';
       }
     }
   } catch (e) {
@@ -345,6 +337,55 @@ async function toWav(blob) {
   return encodeWav(out.getChannelData(0), rate);
 }
 
+/* ── Realtime Symmetrical Audio Waveform Visualizer ── */
+const waveCanvas = document.getElementById('voiceWave');
+const waveCtx = waveCanvas ? waveCanvas.getContext('2d') : null;
+const voiceModal = document.getElementById('voiceModal');
+
+function drawVoiceWave() {
+  if (!analyser || !waveCtx || !waveCanvas) return;
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  analyser.getByteFrequencyData(dataArray);
+
+  const w = waveCanvas.width;
+  const h = waveCanvas.height;
+  waveCtx.clearRect(0, 0, w, h);
+
+  const numBars = 36;
+  const barWidth = 3.5;
+  const gap = 5;
+  const totalWidth = numBars * (barWidth + gap);
+  const startX = (w - totalWidth) / 2;
+  const centerY = h / 2;
+
+  for (let i = 0; i < numBars; i++) {
+    // Symmetrical distance from center
+    const dist = Math.abs(i - numBars / 2) / (numBars / 2);
+    const dataIdx = Math.floor((1 - dist * 0.7) * (bufferLength / 4));
+    const val = dataArray[dataIdx] || 0;
+
+    // Symmetrical vertical bar height with breathing minimum
+    const minHeight = 4;
+    const barHeight = Math.max(minHeight, (val / 255) * (h * 0.85) * (1 - dist * 0.35));
+
+    const x = startX + i * (barWidth + gap);
+    const y = centerY - barHeight / 2;
+
+    const alpha = Math.max(0.35, Math.min(1, val / 180 + 0.2));
+    waveCtx.fillStyle = `rgba(224, 167, 51, ${alpha})`;
+    
+    // Draw rounded vertical bar
+    waveCtx.beginPath();
+    if (waveCtx.roundRect) {
+      waveCtx.roundRect(x, y, barWidth, barHeight, 2);
+    } else {
+      waveCtx.rect(x, y, barWidth, barHeight);
+    }
+    waveCtx.fill();
+  }
+}
+
 function meter() {
   if (!analyser) return;
   const buf = new Uint8Array(analyser.frequencyBinCount);
@@ -352,12 +393,25 @@ function meter() {
   let peak = 0;
   for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128) / 128);
   if (window.__field) window.__field.target = Math.min(1.4, peak * 3.2);
+
+  // Draw voice waveform in real time
+  drawVoiceWave();
+
   meterRAF = requestAnimationFrame(meter);
 }
 
-$('#micBtn').onclick = async () => {
+function stopVoiceRecording() {
+  if (recorder && recorder.state === 'recording') {
+    recorder.stop();
+  }
+}
+
+async function startVoiceRecording() {
   const btn = $('#micBtn');
-  if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+  if (recorder && recorder.state === 'recording') {
+    stopVoiceRecording();
+    return;
+  }
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     $('#hint').classList.add('err');
@@ -369,10 +423,9 @@ $('#micBtn').onclick = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     chunks = [];
 
-    // live amplitude drives the background field
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 512;
+    analyser.fftSize = 256;
     audioCtx.createMediaStreamSource(stream).connect(analyser);
     meter();
 
@@ -381,9 +434,12 @@ $('#micBtn').onclick = async () => {
 
     recorder.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop());
-      cancelAnimationFrame(meterRAF); analyser = null;
-      audioCtx?.close(); audioCtx = null;
+      cancelAnimationFrame(meterRAF);
+      analyser = null;
+      audioCtx?.close();
+      audioCtx = null;
       btn.classList.remove('rec');
+      if (voiceModal) voiceModal.hidden = true;
       $('#hint').textContent = 'transcribing…';
 
       try {
@@ -399,7 +455,7 @@ $('#micBtn').onclick = async () => {
           return;
         }
         $('#q').value = d.transcript;
-        renderAnswer(d, d.answer_source === 'generated' ? 'generated' : 'idle');
+        renderAnswer(d, d.answer_source === 'generated' ? 'generated' : 'idle', d.transcript);
         $('#hint').textContent =
           `heard “${d.transcript}” · STT ${ms(d.stt_ms)} (outside budget) · answer ${ms(d.fast_path_ms)}`;
       } catch (e) {
@@ -410,14 +466,19 @@ $('#micBtn').onclick = async () => {
 
     recorder.start();
     btn.classList.add('rec');
+    if (voiceModal) voiceModal.hidden = false;
     $('#hint').classList.remove('err');
-    $('#hint').textContent = 'listening — click again to stop (30s max)';
-    setTimeout(() => { if (recorder?.state === 'recording') recorder.stop(); }, 30000);
+    $('#hint').textContent = 'listening — tap mic to finish & answer';
   } catch (e) {
+    if (voiceModal) voiceModal.hidden = true;
     $('#hint').classList.add('err');
     $('#hint').textContent = `microphone blocked — ${esc(e.message)}`;
   }
-};
+}
+
+$('#micBtn').onclick = startVoiceRecording;
+const modalBtn = document.getElementById('voiceModalBtn');
+if (modalBtn) modalBtn.onclick = stopVoiceRecording;
 
 /* ───────────────────────── live benchmark ───────────────────────── */
 function countTo(el, target, decimals = 0, dur = 1100) {
