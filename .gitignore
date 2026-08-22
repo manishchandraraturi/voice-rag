@@ -6,6 +6,7 @@ data/raw/
 data/index/
 data/chunks/
 data/vectors/
+data/gdrive/
 # Downloaded ONNX weights + tokenizer (hundreds of MB, refetched on demand).
 data/hf_cache/
 # data/reports/ is deliberately NOT ignored -- the measured latency and eval

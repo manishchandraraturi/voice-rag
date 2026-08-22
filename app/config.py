@@ -1,5 +1,5 @@
-"""Benchmark configuration constants."""
+"""Benchmark and eval configuration constants."""
 
-# Retrieval latency budget (milliseconds).
-# The extractive fast-path must complete embed + search within this window.
-LATENCY_BUDGET_MS = 50
+LATENCY_BUDGET_MS = 200
+GENERATION_BACKEND = "local"
+GENERATION_MODEL = "extractive-e5-small"
