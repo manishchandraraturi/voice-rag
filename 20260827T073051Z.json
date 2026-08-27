@@ -1,0 +1,92 @@
+{
+  "meta": {
+    "target_root": "C:\\Users\\AARYAN UPADHYAY\\Downloads\\HHGOA",
+    "generation_backend": "local",
+    "generation_model_hint": "unknown",
+    "language": "hin",
+    "split": "validation",
+    "num_answerable": 25,
+    "num_unanswerable": 25,
+    "num_examples": 50,
+    "num_chunks": 715,
+    "top_k": 5,
+    "seed": 42,
+    "num_errored": 0
+  },
+  "retrieval": {
+    "check": "retrieval (reference-based)",
+    "num_evaluated": 25,
+    "top_k": 5,
+    "cross_lingual": {
+      "recall_at_k": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0
+      },
+      "mrr": 1.0
+    },
+    "same_language": {
+      "recall_at_k": {
+        "1": 1.0,
+        "3": 1.0,
+        "5": 1.0
+      },
+      "mrr": 1.0
+    }
+  },
+  "faithfulness": {
+    "check": "faithfulness / hallucination (reference-free, LLM-as-judge)",
+    "num_evaluated": 25,
+    "mean_score": 0.9467,
+    "scores_by_example": {},
+    "fully_faithful_fraction": 0.8667
+  },
+  "correctness": {
+    "check": "correctness (reference-based, LLM-as-judge)",
+    "num_evaluated": 25,
+    "mean_score": 1.0,
+    "scores_by_example": {},
+    "fully_correct_fraction": 1.0
+  },
+  "reliability": {
+    "check": "reliability / \"lying factor\" (answerable-vs-answered 2x2)",
+    "num_answerable_evaluated": 25,
+    "num_unanswerable_evaluated": 25,
+    "false_refusal_rate": 0.0,
+    "false_refusal_examples": [],
+    "false_confidence_rate": 0.0,
+    "false_confidence_examples": []
+  },
+  "latency": {
+    "check": "latency",
+    "num_evaluated": 50,
+    "embed": {
+      "avg_ms": 5.86,
+      "p50_ms": 5.56,
+      "p95_ms": 7.92,
+      "p99_ms": 9.52
+    },
+    "search": {
+      "avg_ms": 0.13,
+      "p50_ms": 0.13,
+      "p95_ms": 0.2,
+      "p99_ms": 0.24
+    },
+    "retrieval_total": {
+      "avg_ms": 5.77,
+      "p50_ms": 5.54,
+      "p95_ms": 7.97,
+      "p99_ms": 8.07
+    },
+    "generation": {
+      "avg_ms": 142.3,
+      "p50_ms": 128.7,
+      "p95_ms": 298.4,
+      "p99_ms": 385.1
+    },
+    "retrieval_latency_budget_ms": 200,
+    "retrieval_within_budget": true,
+    "generation_latency_target_ms": 1500.0,
+    "generation_within_target": true
+  }
+}

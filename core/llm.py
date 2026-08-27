@@ -85,6 +85,7 @@ Return ONLY a JSON object, no markdown fence:
 {"answer": str, "sufficient": bool, "citations": []}"""
 
 _JSON_BLOCK = re.compile(r"\{.*\}", re.DOTALL)
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
 @dataclass(slots=True)
@@ -114,6 +115,9 @@ def _parse(text: str) -> dict[str, Any]:
     locate the outermost object rather than trusting the whole response to parse.
     """
     text = (text or "").strip()
+    # Strip <think>...</think> blocks (Qwen3, DeepSeek, etc.) before JSON extraction.
+    # These contain curly braces that corrupt the _JSON_BLOCK regex.
+    text = _THINK_BLOCK.sub("", text).strip()
     try:
         return json.loads(text)
     except json.JSONDecodeError:
@@ -182,8 +186,8 @@ class LLMClient:
             self.base_url = "https://integrate.api.nvidia.com/v1"
         elif self.provider == "groq":
             # Groq runs on LPUs and returns in a few hundred ms.
-            # llama-3.3-70b-versatile is the sweet spot: fast LPU inference + high quality.
-            self.model = model or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+            # openai/gpt-oss-20b is fast, reliable, and produces clean JSON without <think> tags.
+            self.model = model or os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
             self.api_key = os.getenv("GROQ_API_KEY", "")
             self.base_url = "https://api.groq.com/openai/v1"
         elif self.provider == "bedrock":
@@ -309,16 +313,21 @@ class LLMClient:
             if self._client is None:
                 self._client = Groq(api_key=self.api_key, timeout=self.timeout_s)
 
-            resp = self._client.chat.completions.create(
-                model=self.model,
-                messages=[
+            kwargs: dict = {
+                "model": self.model,
+                "messages": [
                     {"role": "system", "content": self._system},
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=max_tokens,
-                temperature=0.0,
-                response_format={"type": "json_object"},
-            )
+                "max_tokens": max_tokens,
+                "temperature": 0.0,
+            }
+            # Qwen3 models fail Groq's strict JSON validation; skip it for them.
+            # _parse() handles JSON extraction from prose output anyway.
+            if "qwen" not in self.model.lower():
+                kwargs["response_format"] = {"type": "json_object"}
+
+            resp = self._client.chat.completions.create(**kwargs)
             return resp.choices[0].message.content or ""
         except ImportError:
             return self._openai_compatible(prompt, max_tokens)
@@ -485,12 +494,12 @@ class LLMChain:
         to eliminate single-model latency spikes and cloud jitter.
         """
         primary_provider = os.getenv("LLM_PROVIDER", "groq").lower()
-        primary_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile") if primary_provider == "groq" else None
+        primary_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b") if primary_provider == "groq" else None
         chain = [LLMClient(provider=primary_provider, model=primary_model)]
 
         spec = os.getenv(
             "LLM_FALLBACK_CHAIN",
-            "groq:llama-3.1-8b-instant,groq:llama3-70b-8192",
+            "groq:qwen/qwen3.6-27b,groq:openai/gpt-oss-120b",
         )
         for entry in (e.strip() for e in spec.split(",") if e.strip()):
             provider, _, model = entry.partition(":")
