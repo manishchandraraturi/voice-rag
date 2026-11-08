@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=12,20,24&height=230&section=header&text=bol.sh%20%F0%9F%8E%99%EF%B8%8F&fontSize=82&fontAlignY=38&desc=%E0%A4%AC%E0%A5%8B%E0%A4%B2%20%E2%80%94%20speak%20in%20any%20Indian%20language.%20get%20a%20cited%20answer%20in%20%3C10ms.&descAlignY=60&descSize=20&animation=fadeIn" alt="bol.sh banner" width="100%"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:ff3d00,100:ffb300&height=230&section=header&text=bol.sh&fontSize=84&fontColor=ffffff&fontAlignY=40&desc=Voice%20RAG%20for%2014%20Indian%20languages&descSize=24&descAlignY=64" alt="bol.sh banner" width="100%"/>
 
 ### 🗣️ Ask in **Hindi · Marathi · Bengali · Tamil · Telugu · Kannada · Malayalam · Gujarati · Punjabi · Odia · Assamese · Urdu · Nepali · Sanskrit · English**
 ### ⚡ Grounded. Cited. **5 ms** transcript-to-answer on the fast path (budget: 200 ms)
@@ -28,7 +28,7 @@
 <div align="center">
 
 <a href="https://13-201-137-78.sslip.io">
-  <img src="assets/bolsh-demo.png" alt="bol.sh live demo: speak a question, get a grounded, cited answer in under 200 ms" width="92%"/>
+  <img src="bolsh-demo.png" alt="bol.sh live demo: speak a question, get a grounded, cited answer in under 200 ms" width="92%"/>
 </a>
 
 <sub>☝️ The real, live UI. Click to open it. Tap 🎤, speak in any of 14 Indian languages, get a cited answer.</sub>
@@ -59,28 +59,22 @@
 
 ```mermaid
 flowchart LR
-    A([🎤 Voice]) --> B[["🗣️ STT<br/>Groq Whisper-large-v3<br/>or Sarvam Saaras v3"]]
-    B --> C{{"🛡️ Input<br/>Guardrail"}}
-    C -- unsafe --> X([🚫 Refuse])
-    C -- ok --> D["🔢 Embed<br/>multilingual-e5-small<br/>ONNX int8"]
-    D --> E["🔍 Hybrid Retrieve"]
-    E --> E1["Dense · hnswlib"]
-    E --> E2["Sparse · bm25s"]
-    E1 --> F["🔀 RRF Fusion"]
-    E2 --> F
-    F --> G["✂️ Extractive Answer"]
-    G --> H{{"🎯 Grounding Gate<br/>support ≥ 0.45?"}}
-    H -- no --> Y([🤷 Honest abstain])
-    H -- yes --> I(["⚡ FAST ANSWER<br/>~5 ms · cited"])
-    I -. async .-> J["🏁 Groq Model Racing<br/>gpt-oss-120b · gpt-oss-20b<br/>qwen3.6-27b · compound-mini"]
-    J --> K{{"✅ Output Verify<br/>no novel facts"}}
-    K --> L(["✨ Polished answer"])
+    A(["🎤 Voice"]) --> B["🗣️ STT<br/>Groq Whisper / Sarvam"]
+    B --> C{{"🛡️ Input<br/>guardrail"}}
+    C --> D["🔢 Embed<br/>e5-small int8"]
+    D --> E["🔍 Hybrid retrieve<br/>dense + BM25 + RRF"]
+    E --> F{{"🎯 Extract +<br/>grounding gate"}}
+    F --> G(["⚡ FAST ANSWER<br/>~5 ms · cited"])
+    G -.->|async| H["🏁 Groq Model Racing<br/>4 LPU models"]
+    H --> I{{"✅ Output<br/>verify"}}
+    I --> J(["✨ Polished answer"])
 
-    style I fill:#00c853,color:#fff,stroke:#00c853
-    style J fill:#F55036,color:#fff,stroke:#F55036
-    style X fill:#d50000,color:#fff
-    style Y fill:#ff6d00,color:#fff
+    style G fill:#00c853,color:#fff,stroke:#00c853
+    style H fill:#F55036,color:#fff,stroke:#F55036
+    style J fill:#ffb300,color:#000,stroke:#ffb300
 ```
+
+> 🚫 Unsafe question? The input guardrail refuses before any retrieval. 🤷 Weak support (< 0.45)? The grounding gate abstains. No LLM call is ever made over weak context.
 
 ### 💡 Three design decisions that matter
 
@@ -175,11 +169,11 @@ A prompt that says "stay grounded" is a **request**. A post-check is a **constra
 
 ```mermaid
 flowchart LR
-    Q([Question]) --> L1["🚧 Layer 1<br/>Input Intent<br/><i>refuse credential asks</i>"]
-    L1 --> L2["🎯 Layer 2<br/>Grounding Gate<br/><i>abstain if support &lt; 0.45</i>"]
+    Q(["❓ Question"]) --> L1["🚧 Layer 1<br/>Input intent"]
+    L1 --> L2["🎯 Layer 2<br/>Grounding gate"]
     L2 --> LLM["🏁 LLM"]
-    LLM --> L3["✅ Layer 3<br/>Generated-text Verify<br/><i>block novel facts</i>"]
-    L3 --> A([Safe answer])
+    LLM --> L3["✅ Layer 3<br/>Output verify"]
+    L3 --> A(["✔️ Safe answer"])
     style L1 fill:#d50000,color:#fff
     style L2 fill:#ff6d00,color:#fff
     style L3 fill:#00c853,color:#fff
@@ -218,13 +212,13 @@ The multilingual encoder maps the English query nearer to a passage about *Jakar
 > The task asks for real thought about how data is split and retrieved. Here's the thinking, **including the parts that went wrong.**
 
 ```mermaid
-flowchart TD
-    A["😐 Ablation #1<br/>4 strategies within 1.2%<br/><b>Null result</b>"] --> B["🔎 Why?<br/>MSMARCO ships pre-segmented passages<br/>→ 1.01 chunks/passage<br/><i>we built 4 ways to not split anything</i>"]
-    B --> C["🐛 Found a tokenizer bug<br/>Python \w shatters Devanagari"]
-    C --> D["🔧 Fix: tokenize by separators<br/><b>+12% MRR</b><br/>3× more than all ensemble work"]
-    D --> E["📊 Re-ran all 7 index subsets<br/>1,500 bilingual queries"]
-    E --> F["🧮 Paired bootstrap, 10k resamples<br/>ensemble's recall win is <b>noise</b>"]
-    F --> G["🏆 Ship ONE index<br/><b>metadata_128</b>"]
+flowchart LR
+    A["😐 Ablation #1<br/>null result"] --> B["🔎 MSMARCO already<br/>pre-segmented"]
+    B --> C["🐛 Tokenizer bug<br/>regex shatters Hindi"]
+    C --> D["🔧 Fix<br/>+12% MRR"]
+    D --> E["📊 7 index subsets<br/>1,500 queries"]
+    E --> F["🧮 Bootstrap<br/>ensemble = noise"]
+    F --> G["🏆 Ship ONE<br/>metadata_128"]
     style C fill:#d50000,color:#fff
     style D fill:#00c853,color:#fff
     style G fill:#ffb300,color:#000
